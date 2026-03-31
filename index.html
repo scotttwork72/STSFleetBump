@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Commercial Fleet Tire Bumper</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; background-color: #f4f4f9; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; position: relative;}
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; }
+        input, select, textarea { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; font-family: inherit;}
+        textarea { resize: vertical; }
+        button { background: #0056b3; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-size: 16px; width: 100%; font-weight: bold;}
+        button:hover { background: #004494; }
+        button:disabled { background: #6c757d; cursor: not-allowed; }
+        
+        /* Auth Styles */
+        #auth-section { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 60vh; }
+        .auth-box { width: 100%; max-width: 400px; }
+        .auth-buttons { display: flex; gap: 10px; margin-top: 15px; }
+        .btn-secondary { background: #6c757d; }
+        .btn-secondary:hover { background: #5a6268; }
+        #app-section { display: none; } /* Hides main app until logged in */
+        
+        .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;}
+        .logout-btn { background: #dc3545; width: auto; padding: 6px 12px; font-size: 14px;}
+        .logout-btn:hover { background: #c82333; }
+        
+        .settings-btn { width: auto; background: #6c757d; padding: 6px 12px; font-size: 14px; font-weight: normal; border-radius: 4px;}
+        .settings-btn:hover { background: #5a6268; }
+
+        #vehicle-layout { display: flex; flex-direction: column; align-items: center; background: #e9ecef; padding: 20px; border-radius: 8px; margin-top: 20px; display: none;}
+        #axles-container { display: flex; flex-direction: column; align-items: center; width: 100%; }
+        
+        .axle { display: flex; justify-content: center; align-items: center; width: 100%; margin: 10px 0; position: relative; }
+        .chassis { width: 40px; height: 100%; background: #6c757d; position: absolute; z-index: 1; border-radius: 2px;}
+        .hitch { width: 12px; height: 35px; background: #343a40; margin: 5px 0; border-radius: 4px; z-index: 1;}
+        
+        .tire-group { display: flex; gap: 5px; z-index: 2; margin: 0 25px; }
+        .tire { width: 35px; height: 65px; background: #28a745; color: white; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; cursor: pointer; user-select: none; transition: background 0.2s, transform 0.1s; border: 2px solid #1e7e34; text-align: center; line-height: 1.1;}
+        .tire:active { transform: scale(0.95); }
+        .tire.replace { background: #dc3545; border-color: #bd2130; }
+
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; display: none; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box;}
+        .modal-content { background: white; padding: 20px; border-radius: 8px; width: 100%; max-width: 350px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); max-height: 90vh; overflow-y: auto;}
+        .modal-content h4 { margin-top: 0; margin-bottom: 5px; font-size: 18px;}
+        .modal-buttons { display: flex; gap: 10px; margin-top: 20px; }
+        .btn-cancel { background: #6c757d; }
+        .btn-cancel:hover { background: #5a6268; }
+        .btn-save { background: #28a745; }
+        .btn-save:hover { background: #218838; }
+
+        .log-entry { background: #fff; padding: 12px; border-left: 5px solid #0056b3; margin-bottom: 10px; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: flex-start;}
+        .log-details { display: flex; flex-direction: column; gap: 4px; width: 100%;}
+        .log-meta { font-size: 12px; color: #666; font-weight: bold; text-transform: uppercase;}
+        .log-issues { color: #dc3545; font-weight: bold; font-size: 13px;}
+        .log-notes { font-size: 12px; color: #444; background: #f8f9fa; padding: 6px; border-radius: 4px; margin-top: 4px; border: 1px solid #eee; }
+        .delete-btn { background: #ffc107; color: #000; width: auto; padding: 5px 10px; font-size: 12px; margin-left: 10px; height: fit-content;}
+        .delete-btn:hover { background: #e0a800; }
+        
+        .action-buttons { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;}
+        .export-btn { background: #17a2b8; margin: 0; flex: 1;}
+        .export-btn:hover { background: #138496; }
+        .email-btn { background: #6f42c1; margin: 0; flex: 1;}
+        .email-btn:hover { background: #59339d; }
+    </style>
+</head>
+<body>
+
+    <div id="auth-section">
+        <div class="card auth-box">
+            <h2 style="text-align: center; margin-top: 0;">Fleet Login</h2>
+            <div class="form-group">
+                <label for="authEmail">Email</label>
+                <input type="email" id="authEmail" placeholder="you@company.com">
+            </div>
+            <div class="form-group">
+                <label for="authPassword">Password</label>
+                <input type="password" id="authPassword" placeholder="••••••••">
+            </div>
+            <div class="auth-buttons">
+                <button onclick="handleLogin()">Log In</button>
+                <button class="btn-secondary" onclick="handleSignup()">Sign Up</button>
+            </div>
+            <p id="authMessage" style="color: #dc3545; font-size: 13px; text-align: center; margin-top: 15px;"></p>
+        </div>
+    </div>
+
+    <div id="app-section">
+        <div class="header-bar">
+            <h2 style="margin: 0;">Fleet Tire Bumper</h2>
+            <button class="logout-btn" onclick="handleLogout()">Log Out</button>
+        </div>
+
+        <div class="card">
+            <button class="settings-btn" style="position: absolute; top: 20px; right: 20px;" onclick="openSettingsModal()">⚙️ Manage Lists</button>
+            
+            <datalist id="companyList"></datalist>
+            <datalist id="inspectorList"></datalist>
+
+            <div class="form-group" style="margin-top: 15px;">
+                <label for="companyName">Company Name</label>
+                <input type="text" id="companyName" list="companyList" placeholder="Select or type company...">
+            </div>
+            <div class="form-group">
+                <label for="inspectorName">Inspected By</label>
+                <input type="text" id="inspectorName" list="inspectorList" placeholder="Select or type your name...">
+            </div>
+            <div class="form-group">
+                <label for="unitNumber">Unit Number(s)</label>
+                <input type="text" id="unitNumber" placeholder="e.g., TR-402" oninput="this.value = this.value.toUpperCase()" required>
+            </div>
+            <div class="form-group">
+                <label for="inspectionDate">Inspection Date</label>
+                <input type="date" id="inspectionDate" required>
+            </div>
+            <div class="form-group">
+                <label for="configSelect">Vehicle Configuration</label>
+                <select id="configSelect">
+                    <optgroup label="Tractors (Power Units)">
+                        <option value="tractor-single">Tractor - Single Axle (2 Axles)</option>
+                        <option value="tractor-tandem">Tractor - Tandem Axle (3 Axles)</option>
+                    </optgroup>
+                    <optgroup label="Trailers & Dollies">
+                        <option value="trailer-pup">Trailer - Single Axle Pup (1 Axle)</option>
+                        <option value="trailer-tandem">Trailer - Tandem Axle (2 Axles)</option>
+                        <option value="trailer-tri">Trailer - Tri-Axle (3 Axles)</option>
+                        <option value="dolly">Converter Dolly (1 Axle)</option>
+                    </optgroup>
+                    <optgroup label="Combinations (Bumping Together)">
+                        <option value="combo-standard">18-Wheeler (Tractor + Tandem Trailer)</option>
+                        <option value="combo-doubles">Multi-Trailer Doubles (Tractor + Pup + Dolly + Pup)</option>
+                    </optgroup>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="unitNotes">General Unit Notes (Optional)</label>
+                <textarea id="unitNotes" rows="3" placeholder="e.g., Mud flap missing, body damage..."></textarea>
+            </div>
+
+            <button onclick="generateLayout()">Start Inspection</button>
+        </div>
+
+        <div id="vehicle-layout" class="card">
+            <h3 id="layout-title" style="margin-top:0;">Inspection</h3>
+            <p style="font-size: 13px; color: #555; margin-bottom: 20px;">Tap a tire to log an issue. Tap a red tire to clear it.</p>
+            
+            <div id="axles-container"></div>
+
+            <button id="submitBtn" style="margin-top: 25px; background: #28a745; border: 2px solid #1e7e34;" onclick="saveInspection()">Submit to Cloud</button>
+        </div>
+
+        <div class="card">
+            <h3 style="margin-top: 0;">My Cloud Logs</h3>
+            <div class="action-buttons">
+                <button class="export-btn" onclick="exportToCSV()">Export to CSV</button>
+                <button class="email-btn" onclick="emailReport()">Email Report</button>
+            </div>
+            <button class="export-btn" style="background: #28a745; margin-bottom: 15px;" onclick="fetchLogs()">🔄 Refresh Cloud Logs</button>
+            <div id="log-container">Loading logs...</div>
+        </div>
+    </div>
+
+    <div id="settingsModal" class="modal-overlay">
+        <div class="modal-content">
+            <h4>Manage Dropdown Lists</h4>
+            <p style="font-size: 12px; color: #555; margin-bottom: 15px;">Paste your list of companies and staff members below. Keep one name per line.</p>
+            <div class="form-group">
+                <label for="uploadCompanies">Companies List</label>
+                <textarea id="uploadCompanies" rows="5"></textarea>
+            </div>
+            <div class="form-group">
+                <label for="uploadInspectors">Inspected By (Staff List)</label>
+                <textarea id="uploadInspectors" rows="5"></textarea>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn-cancel" onclick="closeSettingsModal()">Cancel</button>
+                <button class="btn-save" onclick="saveLists()">Save Lists</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="issueModal" class="modal-overlay">
+        <div class="modal-content">
+            <h4>Select Tire Issue</h4>
+            <p id="modalTirePosition" style="font-size: 14px; color: #555; margin-bottom: 15px;"></p>
+            <select id="issueSelect">
+                <option value="Low Tread">Low Tread</option>
+                <option value="Flat / Puncture">Flat / Puncture</option>
+                <option value="Sidewall Damage">Sidewall Damage</option>
+                <option value="Cupping / Irregular Wear">Cupping / Irregular Wear</option>
+                <option value="Missing Valve Cap">Missing Valve Cap / Stem Issue</option>
+                <option value="Other Damage">Other Damage</option>
+            </select>
+            <div class="modal-buttons">
+                <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+                <button class="btn-save" onclick="saveTireIssue()" style="background: #dc3545;">Replace Tire</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // SUPABASE CONFIGURATION
+        // ==========================================
+        const supabaseUrl = 'https://jksogknuoseclngdwnng.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imprc29na251b3NlY2xuZ2R3bm5nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5ODM4MDksImV4cCI6MjA5MDU1OTgwOX0.k4Gc0UTJTmKk3jgQlkTtfXFmii7X2DV5geCSuVGU7eo';
+        
+        let supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
+        let currentUser = null; // Stores the logged-in user
+
+        // ==========================================
+        // AUTHENTICATION LOGIC
+        // ==========================================
+        
+        // Listen for login/logout changes
+        supabaseClient.auth.onAuthStateChange((event, session) => {
+            if (session) {
+                currentUser = session.user;
+                document.getElementById('auth-section').style.display = 'none';
+                document.getElementById('app-section').style.display = 'block';
+                loadLists(); 
+                fetchLogs(); // Fetch logs specifically for this user
+            } else {
+                currentUser = null;
+                document.getElementById('auth-section').style.display = 'flex';
+                document.getElementById('app-section').style.display = 'none';
+            }
+        });
+
+        async function handleSignup() {
+            const email = document.getElementById('authEmail').value;
+            const password = document.getElementById('authPassword').value;
+            const msgBox = document.getElementById('authMessage');
+            
+            if (!email || !password) { msgBox.innerText = "Please enter email and password."; return; }
+            
+            msgBox.innerText = "Signing up...";
+            const { data, error } = await supabaseClient.auth.signUp({ email, password });
+            
+            if (error) {
+                msgBox.innerText = error.message;
+            } else {
+                msgBox.style.color = "#28a745";
+                msgBox.innerText = "Check your email to confirm your account!";
+            }
+        }
+
+        async function handleLogin() {
+            const email = document.getElementById('authEmail').value;
+            const password = document.getElementById('authPassword').value;
+            const msgBox = document.getElementById('authMessage');
+            
+            if (!email || !password) { msgBox.innerText = "Please enter email and password."; return; }
+            
+            msgBox.innerText = "Logging in...";
+            const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+            
+            if (error) {
+                msgBox.style.color = "#dc3545";
+                msgBox.innerText = error.message;
+            } else {
+                msgBox.innerText = "";
+            }
+        }
+
+        async function handleLogout() {
+            await supabaseClient.auth.signOut();
+        }
+
+        // ==========================================
+        // APP LOGIC
+        // ==========================================
+        let currentTires = [];
+        let activeTireId = null; 
+        let cloudLogs = []; 
+
+        document.getElementById('inspectionDate').valueAsDate = new Date();
+
+        const layouts = {
+            'tractor-single': [2, 4],
+            'tractor-tandem': [2, 4, 4],
+            'trailer-pup': [4],
+            'trailer-tandem': [4, 4],
+            'trailer-tri': [4, 4, 4],
+            'dolly': [4],
+            'combo-standard': [2, 4, 4, 'gap', 4, 4],
+            'combo-doubles': [2, 4, 4, 'gap', 4, 'gap', 4, 'gap', 4] 
+        };
+
+        function loadLists() {
+            const companies = JSON.parse(localStorage.getItem('fleetCompanyList')) || [];
+            const inspectors = JSON.parse(localStorage.getItem('fleetInspectorList')) || [];
+            const companyDatalist = document.getElementById('companyList');
+            const inspectorDatalist = document.getElementById('inspectorList');
+            
+            companyDatalist.innerHTML = '';
+            companies.forEach(c => companyDatalist.appendChild(new Option(c, c)));
+            inspectorDatalist.innerHTML = '';
+            inspectors.forEach(i => inspectorDatalist.appendChild(new Option(i, i)));
+
+            document.getElementById('uploadCompanies').value = companies.join('\n');
+            document.getElementById('uploadInspectors').value = inspectors.join('\n');
+        }
+
+        function openSettingsModal() { document.getElementById('settingsModal').style.display = 'flex'; }
+        function closeSettingsModal() { document.getElementById('settingsModal').style.display = 'none'; }
+        
+        function saveLists() {
+            const cArray = document.getElementById('uploadCompanies').value.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+            const iArray = document.getElementById('uploadInspectors').value.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+            localStorage.setItem('fleetCompanyList', JSON.stringify(cArray));
+            localStorage.setItem('fleetInspectorList', JSON.stringify(iArray));
+            loadLists();
+            closeSettingsModal();
+        }
+
+        function generateLayout() {
+            const unit = document.getElementById('unitNumber').value;
+            const configKey = document.getElementById('configSelect').value;
+            const dateVal = document.getElementById('inspectionDate').value;
+            
+            if (!unit || !dateVal) { alert('Please fill in Unit Number and Date.'); return; }
+
+            document.getElementById('vehicle-layout').style.display = 'flex';
+            document.getElementById('layout-title').innerText = `Inspecting: ${unit.toUpperCase()}`;
+            
+            const container = document.getElementById('axles-container');
+            container.innerHTML = ''; 
+            currentTires = [];
+
+            const layoutPlan = layouts[configKey];
+            let axleCounter = 1;
+
+            layoutPlan.forEach(item => {
+                if (item === 'gap') {
+                    const hitch = document.createElement('div');
+                    hitch.className = 'hitch';
+                    container.appendChild(hitch);
+                } else {
+                    const axleDiv = document.createElement('div');
+                    axleDiv.className = 'axle';
+                    
+                    const chassis = document.createElement('div');
+                    chassis.className = 'chassis';
+                    axleDiv.appendChild(chassis);
+
+                    const leftGroup = document.createElement('div');
+                    leftGroup.className = 'tire-group';
+                    if (item === 4) leftGroup.appendChild(createTire(`A${axleCounter}-LO`, 'L-Out'));
+                    leftGroup.appendChild(createTire(`A${axleCounter}-LI`, item === 2 ? 'L' : 'L-In'));
+                    axleDiv.appendChild(leftGroup);
+
+                    const rightGroup = document.createElement('div');
+                    rightGroup.className = 'tire-group';
+                    rightGroup.appendChild(createTire(`A${axleCounter}-RI`, item === 2 ? 'R' : 'R-In'));
+                    if (item === 4) rightGroup.appendChild(createTire(`A${axleCounter}-RO`, 'R-Out'));
+                    axleDiv.appendChild(rightGroup);
+
+                    container.appendChild(axleDiv);
+                    axleCounter++;
+                }
+            });
+        }
+
+        function createTire(positionId, label) {
+            const tire = document.createElement('div');
+            tire.className = 'tire';
+            tire.innerHTML = label.replace('-', '<br>');
+            tire.dataset.position = positionId;
+            tire.dataset.replace = "false";
+            
+            currentTires.push({ position: positionId, needsReplacement: false, reason: "" });
+
+            tire.onclick = function() {
+                if (this.dataset.replace === "true") {
+                    this.dataset.replace = "false";
+                    this.classList.remove('replace');
+                    const tireObj = currentTires.find(t => t.position === positionId);
+                    tireObj.needsReplacement = false;
+                    tireObj.reason = "";
+                } else {
+                    activeTireId = positionId;
+                    document.getElementById('modalTirePosition').innerText = `Position: ${positionId}`;
+                    document.getElementById('issueSelect').value = "Low Tread";
+                    document.getElementById('issueModal').style.display = 'flex';
+                }
+            };
+            return tire;
+        }
+
+        function closeModal() { document.getElementById('issueModal').style.display = 'none'; activeTireId = null; }
+
+        function saveTireIssue() {
+            if (!activeTireId) return;
+            const reason = document.getElementById('issueSelect').value;
+            const tireElement = document.querySelector(`.tire[data-position="${activeTireId}"]`);
+            tireElement.dataset.replace = "true";
+            tireElement.classList.add('replace');
+            
+            const tireObj = currentTires.find(t => t.position === activeTireId);
+            tireObj.needsReplacement = true;
+            tireObj.reason = reason;
+            closeModal();
+        }
+
+        async function saveInspection() {
+            const company = document.getElementById('companyName').value.trim();
+            const inspector = document.getElementById('inspectorName').value.trim();
+            const unit = document.getElementById('unitNumber').value.toUpperCase();
+            const notes = document.getElementById('unitNotes').value.trim();
+            const dateVal = document.getElementById('inspectionDate').value; 
+
+            const btn = document.getElementById('submitBtn');
+            btn.innerText = "Saving to Cloud...";
+            btn.disabled = true;
+
+            const { data, error } = await supabaseClient
+                .from('inspections')
+                .insert([
+                    { 
+                        company: company, 
+                        inspector: inspector, 
+                        unit: unit, 
+                        inspection_date: dateVal, 
+                        notes: notes, 
+                        tires: currentTires,
+                        user_id: currentUser.id // Ties this record to the logged-in user!
+                    }
+                ]);
+
+            if (error) {
+                alert("Error saving: " + error.message);
+                console.error(error);
+            } else {
+                document.getElementById('vehicle-layout').style.display = 'none';
+                document.getElementById('unitNumber').value = '';
+                document.getElementById('unitNotes').value = '';
+                fetchLogs(); 
+            }
+
+            btn.innerText = "Submit to Cloud";
+            btn.disabled = false;
+        }
+
+        async function fetchLogs() {
+            const container = document.getElementById('log-container');
+            container.innerHTML = 'Loading your logs...';
+
+            const { data, error } = await supabaseClient
+                .from('inspections')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(50);
+
+            if (error) {
+                container.innerHTML = '<p style="color: red;">Error loading logs: ' + error.message + '</p>';
+                console.error(error);
+                return;
+            }
+
+            cloudLogs = data; 
+            renderLogs(data);
+        }
+
+        async function deleteLog(id) {
+            if(confirm('Delete this inspection permanently?')) {
+                const { error } = await supabaseClient.from('inspections').delete().eq('id', id);
+                if (error) {
+                    alert("Error deleting: " + error.message);
+                } else {
+                    fetchLogs();
+                }
+            }
+        }
+
+        function renderLogs(logs) {
+            const container = document.getElementById('log-container');
+            container.innerHTML = '';
+
+            if (logs.length === 0) {
+                container.innerHTML = '<p style="color: #666;">No inspections found for this account.</p>';
+                return;
+            }
+
+            logs.forEach(log => {
+                const logDiv = document.createElement('div');
+                logDiv.className = 'log-entry';
+                
+                const failedTires = log.tires.filter(t => t.needsReplacement).map(t => `${t.position} [${t.reason}]`);
+                
+                const statusHtml = failedTires.length > 0 
+                    ? `<span class="log-issues">Replace: ${failedTires.join(', ')}</span>` 
+                    : `<span style="color: #28a745; font-weight: bold; font-size: 13px;">All Passed</span>`;
+
+                const notesHtml = log.notes ? `<div class="log-notes"><strong>Notes:</strong> ${log.notes}</div>` : '';
+                
+                let metaInfo = [];
+                if (log.company) metaInfo.push(log.company);
+                if (log.inspector) metaInfo.push(`Insp: ${log.inspector}`);
+                const metaHtml = metaInfo.length > 0 ? `<span class="log-meta">${metaInfo.join(' | ')}</span>` : '';
+
+                logDiv.innerHTML = `
+                    <div class="log-details">
+                        ${metaHtml}
+                        <strong>${log.unit}</strong>
+                        <span style="font-size: 11px; color: #666;">Date: ${log.inspection_date}</span>
+                        ${statusHtml}
+                        ${notesHtml}
+                    </div>
+                    <button class="delete-btn" onclick="deleteLog('${log.id}')">Del</button>
+                `;
+                container.appendChild(logDiv);
+            });
+        }
+
+        function exportToCSV() {
+            if (cloudLogs.length === 0) { alert("No logs fetched to export."); return; }
+
+            let csvContent = "Inspection ID,Company Name,Inspected By,Unit Number,Date,Status,Failed Tire Details,Notes\n";
+
+            cloudLogs.forEach(log => {
+                const failedTires = log.tires.filter(t => t.needsReplacement).map(t => `${t.position} (${t.reason})`).join(' | ');
+                const status = failedTires.length > 0 ? "Issues Found" : "All Passed";
+                const safeNotes = (log.notes || "").replace(/"/g, '""');
+                const safeCompany = (log.company || "").replace(/"/g, '""');
+                const safeInspector = (log.inspector || "").replace(/"/g, '""');
+                
+                const row = `"${log.id}","${safeCompany}","${safeInspector}","${log.unit}","${log.inspection_date}","${status}","${failedTires}","${safeNotes}"`;
+                csvContent += row + "\n";
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", `my_fleet_inspections_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function emailReport() {
+            if (cloudLogs.length === 0) {
+                alert("No inspections to email yet.");
+                return;
+            }
+
+            let emailBody = "FLEET TIRE INSPECTION REPORT\n";
+            emailBody += "----------------------------------------\n\n";
+
+            cloudLogs.forEach(log => {
+                const failedTires = log.tires.filter(t => t.needsReplacement)
+                                             .map(t => `${t.position} (${t.reason})`).join(', ');
+                
+                const status = failedTires.length > 0 ? "⚠️ ISSUES FOUND" : "✅ All Passed";
+                
+                emailBody += `Company: ${log.company || "N/A"}\n`;
+                emailBody += `Inspected By: ${log.inspector || "N/A"}\n`;
+                emailBody += `Unit Number: ${log.unit}\n`;
+                emailBody += `Date: ${log.inspection_date}\n`;
+                emailBody += `Status: ${status}\n`;
+                if (failedTires.length > 0) emailBody += `Action Needed: ${failedTires}\n`;
+                if (log.notes) emailBody += `Notes: ${log.notes}\n`;
+                emailBody += "\n----------------------------------------\n\n";
+            });
+
+            const subject = encodeURIComponent(`Yard Inspection Report - ${new Date().toISOString().split('T')[0]}`);
+            const body = encodeURIComponent(emailBody);
+            
+            window.location.href = `mailto:?subject=${subject}&body=${body}`;
+        }
+    </script>
+</body>
+</html>
