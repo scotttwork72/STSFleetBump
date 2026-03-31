@@ -131,13 +131,12 @@
     <div id="settingsModal" class="modal-overlay">
         <div class="modal-content">
             <h4>Manage Dropdown Lists</h4>
-            <p style="font-size: 12px; color: #555; margin-bottom: 15px;">Paste your list of companies and staff members below. Keep one name per line.</p>
             <div class="form-group">
                 <label for="uploadCompanies">Companies List</label>
                 <textarea id="uploadCompanies" rows="5"></textarea>
             </div>
             <div class="form-group">
-                <label for="uploadInspectors">Inspected By (Staff List)</label>
+                <label for="uploadInspectors">Inspected By List</label>
                 <textarea id="uploadInspectors" rows="5"></textarea>
             </div>
             <div class="modal-buttons">
@@ -150,13 +149,13 @@
     <div id="issueModal" class="modal-overlay">
         <div class="modal-content">
             <h4>Select Tire Issue</h4>
-            <p id="modalTirePosition" style="font-size: 14px; color: #555; margin-bottom: 15px;"></p>
+            <p id="modalTirePosition" style="font-size: 14px; color: #555;"></p>
             <select id="issueSelect">
                 <option value="Low Tread">Low Tread</option>
                 <option value="Flat / Puncture">Flat / Puncture</option>
                 <option value="Sidewall Damage">Sidewall Damage</option>
                 <option value="Cupping / Irregular Wear">Cupping / Irregular Wear</option>
-                <option value="Missing Valve Cap">Missing Valve Cap / Stem Issue</option>
+                <option value="Missing Valve Cap">Missing Valve Cap</option>
                 <option value="Other Damage">Other Damage</option>
             </select>
             <div class="modal-buttons">
@@ -167,29 +166,26 @@
     </div>
 
     <script>
-        // ==========================================
-        // INITIALIZE SUPABASE WITH SAFETY CATCH
-        // ==========================================
-        const supabaseUrl = 'YOUR_SUPABASE_PROJECT_URL';
-        const supabaseKey = 'YOUR_SUPABASE_ANON_KEY';
+        // SUPABASE CONFIG
+        const supabaseUrl = 'https://jksogknuoseclngdwnng.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imprc29na251b3NlY2xuZ2R3bm5nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5ODM4MDksImV4cCI6MjA5MDU1OTgwOX0.k4Gc0UTJTmKk3jgQlkTtfXFmii7X2DV5geCSuVGU7eo';
         let supabase = null;
 
-        try {
-            // Only try to connect if you've actually pasted your real keys in
-            if (supabaseUrl !== 'YOUR_SUPABASE_PROJECT_URL') {
+        window.onload = function() {
+            try {
                 supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
-            } else {
-                console.warn("Supabase keys not configured yet. Cloud saving disabled, but app will still run.");
+                console.log("Supabase connected.");
+            } catch(e) {
+                console.error("Supabase failed:", e);
             }
-        } catch(e) {
-            console.error("Supabase failed to initialize:", e);
-        }
+            document.getElementById('inspectionDate').valueAsDate = new Date();
+            loadLists();
+            fetchLogs();
+        };
 
         let currentTires = [];
-        let activeTireId = null; 
-        let cloudLogs = []; // Stores data globally for emailing/exporting
-
-        document.getElementById('inspectionDate').valueAsDate = new Date();
+        let activeTireId = null;
+        let cloudLogs = [];
 
         const layouts = {
             'tractor-single': [2, 4],
@@ -199,314 +195,143 @@
             'trailer-tri': [4, 4, 4],
             'dolly': [4],
             'combo-standard': [2, 4, 4, 'gap', 4, 4],
-            'combo-doubles': [2, 4, 4, 'gap', 4, 'gap', 4, 'gap', 4] 
+            'combo-doubles': [2, 4, 4, 'gap', 4, 'gap', 4, 'gap', 4]
         };
 
-        // ----- List Management (Local Storage) -----
         function loadLists() {
             const companies = JSON.parse(localStorage.getItem('fleetCompanyList')) || [];
             const inspectors = JSON.parse(localStorage.getItem('fleetInspectorList')) || [];
-            const companyDatalist = document.getElementById('companyList');
-            const inspectorDatalist = document.getElementById('inspectorList');
-            
-            companyDatalist.innerHTML = '';
-            companies.forEach(c => companyDatalist.appendChild(new Option(c, c)));
-            inspectorDatalist.innerHTML = '';
-            inspectors.forEach(i => inspectorDatalist.appendChild(new Option(i, i)));
-
+            document.getElementById('companyList').innerHTML = companies.map(c => `<option value="${c}">`).join('');
+            document.getElementById('inspectorList').innerHTML = inspectors.map(i => `<option value="${i}">`).join('');
             document.getElementById('uploadCompanies').value = companies.join('\n');
             document.getElementById('uploadInspectors').value = inspectors.join('\n');
         }
 
         function openSettingsModal() { document.getElementById('settingsModal').style.display = 'flex'; }
         function closeSettingsModal() { document.getElementById('settingsModal').style.display = 'none'; }
-        
         function saveLists() {
-            const cArray = document.getElementById('uploadCompanies').value.split('\n').map(s => s.trim()).filter(s => s.length > 0);
-            const iArray = document.getElementById('uploadInspectors').value.split('\n').map(s => s.trim()).filter(s => s.length > 0);
-            localStorage.setItem('fleetCompanyList', JSON.stringify(cArray));
-            localStorage.setItem('fleetInspectorList', JSON.stringify(iArray));
-            loadLists();
-            closeSettingsModal();
+            const c = document.getElementById('uploadCompanies').value.split('\n').filter(s => s.trim());
+            const i = document.getElementById('uploadInspectors').value.split('\n').filter(s => s.trim());
+            localStorage.setItem('fleetCompanyList', JSON.stringify(c));
+            localStorage.setItem('fleetInspectorList', JSON.stringify(i));
+            loadLists(); closeSettingsModal();
         }
 
-        // ----- Layout Generation -----
         function generateLayout() {
             const unit = document.getElementById('unitNumber').value;
-            const configKey = document.getElementById('configSelect').value;
-            const dateVal = document.getElementById('inspectionDate').value;
-            
-            if (!unit || !dateVal) { alert('Please fill in Unit Number and Date.'); return; }
-
+            if (!unit) return alert("Enter Unit Number");
             document.getElementById('vehicle-layout').style.display = 'flex';
-            document.getElementById('layout-title').innerText = `Inspecting: ${unit.toUpperCase()}`;
-            
+            document.getElementById('layout-title').innerText = `Unit: ${unit.toUpperCase()}`;
             const container = document.getElementById('axles-container');
-            container.innerHTML = ''; 
-            currentTires = [];
-
-            const layoutPlan = layouts[configKey];
-            let axleCounter = 1;
-
-            layoutPlan.forEach(item => {
+            container.innerHTML = ''; currentTires = [];
+            
+            const config = layouts[document.getElementById('configSelect').value];
+            let axleNum = 1;
+            config.forEach(item => {
                 if (item === 'gap') {
-                    const hitch = document.createElement('div');
-                    hitch.className = 'hitch';
-                    container.appendChild(hitch);
+                    const h = document.createElement('div'); h.className = 'hitch'; container.appendChild(h);
                 } else {
-                    const axleDiv = document.createElement('div');
-                    axleDiv.className = 'axle';
+                    const axle = document.createElement('div'); axle.className = 'axle';
+                    const ch = document.createElement('div'); ch.className = 'chassis'; axle.appendChild(ch);
                     
-                    const chassis = document.createElement('div');
-                    chassis.className = 'chassis';
-                    axleDiv.appendChild(chassis);
-
-                    const leftGroup = document.createElement('div');
-                    leftGroup.className = 'tire-group';
-                    if (item === 4) leftGroup.appendChild(createTire(`A${axleCounter}-LO`, 'L-Out'));
-                    leftGroup.appendChild(createTire(`A${axleCounter}-LI`, item === 2 ? 'L' : 'L-In'));
-                    axleDiv.appendChild(leftGroup);
-
-                    const rightGroup = document.createElement('div');
-                    rightGroup.className = 'tire-group';
-                    rightGroup.appendChild(createTire(`A${axleCounter}-RI`, item === 2 ? 'R' : 'R-In'));
-                    if (item === 4) rightGroup.appendChild(createTire(`A${axleCounter}-RO`, 'R-Out'));
-                    axleDiv.appendChild(rightGroup);
-
-                    container.appendChild(axleDiv);
-                    axleCounter++;
+                    const left = document.createElement('div'); left.className = 'tire-group';
+                    if(item === 4) left.appendChild(createTire(`A${axleNum}-LO`, 'L-Out'));
+                    left.appendChild(createTire(`A${axleNum}-LI`, item === 2 ? 'L' : 'L-In'));
+                    
+                    const right = document.createElement('div'); right.className = 'tire-group';
+                    right.appendChild(createTire(`A${axleNum}-RI`, item === 2 ? 'R' : 'R-In'));
+                    if(item === 4) right.appendChild(createTire(`A${axleNum}-RO`, 'R-Out'));
+                    
+                    axle.appendChild(left); axle.appendChild(right);
+                    container.appendChild(axle); axleNum++;
                 }
             });
         }
 
-        function createTire(positionId, label) {
-            const tire = document.createElement('div');
-            tire.className = 'tire';
-            tire.innerHTML = label.replace('-', '<br>');
-            tire.dataset.position = positionId;
-            tire.dataset.replace = "false";
-            
-            currentTires.push({ position: positionId, needsReplacement: false, reason: "" });
-
-            tire.onclick = function() {
-                if (this.dataset.replace === "true") {
-                    this.dataset.replace = "false";
+        function createTire(pos, label) {
+            const t = document.createElement('div'); t.className = 'tire';
+            t.innerHTML = label.replace('-', '<br>'); t.dataset.position = pos;
+            currentTires.push({ position: pos, needsReplacement: false, reason: "" });
+            t.onclick = function() {
+                if(this.classList.contains('replace')) {
                     this.classList.remove('replace');
-                    const tireObj = currentTires.find(t => t.position === positionId);
-                    tireObj.needsReplacement = false;
-                    tireObj.reason = "";
+                    currentTires.find(x => x.position === pos).needsReplacement = false;
                 } else {
-                    activeTireId = positionId;
-                    document.getElementById('modalTirePosition').innerText = `Position: ${positionId}`;
-                    document.getElementById('issueSelect').value = "Low Tread";
+                    activeTireId = pos;
+                    document.getElementById('modalTirePosition').innerText = pos;
                     document.getElementById('issueModal').style.display = 'flex';
                 }
             };
-            return tire;
+            return t;
         }
 
-        function closeModal() { document.getElementById('issueModal').style.display = 'none'; activeTireId = null; }
-
+        function closeModal() { document.getElementById('issueModal').style.display = 'none'; }
         function saveTireIssue() {
-            if (!activeTireId) return;
             const reason = document.getElementById('issueSelect').value;
-            const tireElement = document.querySelector(`.tire[data-position="${activeTireId}"]`);
-            tireElement.dataset.replace = "true";
-            tireElement.classList.add('replace');
-            
-            const tireObj = currentTires.find(t => t.position === activeTireId);
-            tireObj.needsReplacement = true;
-            tireObj.reason = reason;
+            const el = document.querySelector(`.tire[data-position="${activeTireId}"]`);
+            el.classList.add('replace');
+            const obj = currentTires.find(x => x.position === activeTireId);
+            obj.needsReplacement = true; obj.reason = reason;
             closeModal();
         }
 
-        // ----- SUPABASE: Insert Data -----
         async function saveInspection() {
-            if (!supabase) {
-                alert("Supabase keys are missing in the code! Cannot save to cloud. Please add your URL and ANON KEY to the script.");
-                return;
-            }
-
-            const company = document.getElementById('companyName').value.trim();
-            const inspector = document.getElementById('inspectorName').value.trim();
-            const unit = document.getElementById('unitNumber').value.toUpperCase();
-            const notes = document.getElementById('unitNotes').value.trim();
-            const dateVal = document.getElementById('inspectionDate').value; 
-
-            const btn = document.getElementById('submitBtn');
-            btn.innerText = "Saving to Cloud...";
-            btn.disabled = true;
-
-            const { data, error } = await supabase
-                .from('inspections')
-                .insert([
-                    { 
-                        company: company, 
-                        inspector: inspector, 
-                        unit: unit, 
-                        inspection_date: dateVal, 
-                        notes: notes, 
-                        tires: currentTires 
-                    }
-                ]);
-
-            if (error) {
-                alert("Error saving: " + error.message);
-                console.error(error);
-            } else {
-                document.getElementById('vehicle-layout').style.display = 'none';
-                document.getElementById('unitNumber').value = '';
-                document.getElementById('unitNotes').value = '';
-                fetchLogs(); // Refresh the cloud list
-            }
-
-            btn.innerText = "Submit to Cloud";
+            if(!supabase) return alert("Not connected");
+            const btn = document.getElementById('submitBtn'); btn.disabled = true;
+            const { error } = await supabase.from('inspections').insert([{
+                company: document.getElementById('companyName').value,
+                inspector: document.getElementById('inspectorName').value,
+                unit: document.getElementById('unitNumber').value.toUpperCase(),
+                inspection_date: document.getElementById('inspectionDate').value,
+                notes: document.getElementById('unitNotes').value,
+                tires: currentTires
+            }]);
+            if(error) alert(error.message);
+            else { alert("Success!"); document.getElementById('vehicle-layout').style.display = 'none'; fetchLogs(); }
             btn.disabled = false;
         }
 
-        // ----- SUPABASE: Fetch Data -----
         async function fetchLogs() {
-            const container = document.getElementById('log-container');
-            
-            if (!supabase) {
-                container.innerHTML = '<p style="color: #dc3545;">Supabase not connected. Add your keys to the code to fetch logs.</p>';
-                return;
-            }
-
-            container.innerHTML = 'Loading from cloud...';
-
-            const { data, error } = await supabase
-                .from('inspections')
-                .select('*')
-                .order('created_at', { ascending: false })
-                .limit(50); // Pulls the latest 50 logs
-
-            if (error) {
-                container.innerHTML = '<p style="color: red;">Error loading logs.</p>';
-                console.error(error);
-                return;
-            }
-
-            cloudLogs = data; // Store globally for CSV export and Email
-            renderLogs(data);
-        }
-
-        // ----- SUPABASE: Delete Data -----
-        async function deleteLog(id) {
-            if (!supabase) return;
-            if(confirm('Delete this inspection from the cloud permanently?')) {
-                const { error } = await supabase.from('inspections').delete().eq('id', id);
-                if (error) {
-                    alert("Error deleting: " + error.message);
-                } else {
-                    fetchLogs();
-                }
-            }
+            if(!supabase) return;
+            const { data, error } = await supabase.from('inspections').select('*').order('created_at', {ascending:false}).limit(20);
+            if(!error) { cloudLogs = data; renderLogs(data); }
         }
 
         function renderLogs(logs) {
             const container = document.getElementById('log-container');
-            container.innerHTML = '';
-
-            if (logs.length === 0) {
-                container.innerHTML = '<p style="color: #666;">No inspections in the cloud yet.</p>';
-                return;
-            }
-
-            logs.forEach(log => {
-                const logDiv = document.createElement('div');
-                logDiv.className = 'log-entry';
-                
-                const failedTires = log.tires.filter(t => t.needsReplacement).map(t => `${t.position} [${t.reason}]`);
-                
-                const statusHtml = failedTires.length > 0 
-                    ? `<span class="log-issues">Replace: ${failedTires.join(', ')}</span>` 
-                    : `<span style="color: #28a745; font-weight: bold; font-size: 13px;">All Passed</span>`;
-
-                const notesHtml = log.notes ? `<div class="log-notes"><strong>Notes:</strong> ${log.notes}</div>` : '';
-                
-                let metaInfo = [];
-                if (log.company) metaInfo.push(log.company);
-                if (log.inspector) metaInfo.push(`Insp: ${log.inspector}`);
-                const metaHtml = metaInfo.length > 0 ? `<span class="log-meta">${metaInfo.join(' | ')}</span>` : '';
-
-                logDiv.innerHTML = `
+            container.innerHTML = logs.map(l => {
+                const failed = l.tires.filter(t => t.needsReplacement).map(t => t.position).join(', ');
+                return `
+                <div class="log-entry">
                     <div class="log-details">
-                        ${metaHtml}
-                        <strong>${log.unit}</strong>
-                        <span style="font-size: 11px; color: #666;">Date: ${log.inspection_date}</span>
-                        ${statusHtml}
-                        ${notesHtml}
+                        <span class="log-meta">${l.company || ''} | ${l.inspector || ''}</span>
+                        <strong>${l.unit}</strong> (${l.inspection_date})
+                        <div class="${failed ? 'log-issues' : ''}">${failed ? 'Replace: ' + failed : 'All Clear'}</div>
                     </div>
-                    <button class="delete-btn" onclick="deleteLog('${log.id}')">Del</button>
-                `;
-                container.appendChild(logDiv);
-            });
+                    <button class="delete-btn" onclick="deleteLog('${l.id}')">Del</button>
+                </div>`;
+            }).join('');
         }
 
-        // ----- Export and Email Features -----
+        async function deleteLog(id) {
+            if(confirm("Delete?")) { await supabase.from('inspections').delete().eq('id', id); fetchLogs(); }
+        }
+
         function exportToCSV() {
-            if (cloudLogs.length === 0) { alert("No logs fetched to export."); return; }
-
-            let csvContent = "Inspection ID,Company Name,Inspected By,Unit Number,Date,Status,Failed Tire Details,Notes\n";
-
-            cloudLogs.forEach(log => {
-                const failedTires = log.tires.filter(t => t.needsReplacement).map(t => `${t.position} (${t.reason})`).join(' | ');
-                const status = failedTires.length > 0 ? "Issues Found" : "All Passed";
-                const safeNotes = (log.notes || "").replace(/"/g, '""');
-                const safeCompany = (log.company || "").replace(/"/g, '""');
-                const safeInspector = (log.inspector || "").replace(/"/g, '""');
-                
-                const row = `"${log.id}","${safeCompany}","${safeInspector}","${log.unit}","${log.inspection_date}","${status}","${failedTires}","${safeNotes}"`;
-                csvContent += row + "\n";
+            let csv = "Unit,Date,Company,Issues,Notes\n";
+            cloudLogs.forEach(l => {
+                const issues = l.tires.filter(t => t.needsReplacement).map(t => `${t.position}(${t.reason})`).join(';');
+                csv += `${l.unit},${l.inspection_date},${l.company},"${issues}","${l.notes}"\n`;
             });
-
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.setAttribute("href", url);
-            link.setAttribute("download", `cloud_fleet_inspections_${new Date().toISOString().split('T')[0]}.csv`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            const blob = new Blob([csv], {type:'text/csv'});
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+            a.download = `inspections_${new Date().toLocaleDateString()}.csv`; a.click();
         }
 
         function emailReport() {
-            if (cloudLogs.length === 0) {
-                alert("No inspections to email yet.");
-                return;
-            }
-
-            let emailBody = "FLEET TIRE INSPECTION REPORT\n";
-            emailBody += "----------------------------------------\n\n";
-
-            cloudLogs.forEach(log => {
-                const failedTires = log.tires.filter(t => t.needsReplacement)
-                                             .map(t => `${t.position} (${t.reason})`).join(', ');
-                
-                const status = failedTires.length > 0 ? "⚠️ ISSUES FOUND" : "✅ All Passed";
-                
-                emailBody += `Company: ${log.company || "N/A"}\n`;
-                emailBody += `Inspected By: ${log.inspector || "N/A"}\n`;
-                emailBody += `Unit Number: ${log.unit}\n`;
-                emailBody += `Date: ${log.inspection_date}\n`;
-                emailBody += `Status: ${status}\n`;
-                if (failedTires.length > 0) emailBody += `Action Needed: ${failedTires}\n`;
-                if (log.notes) emailBody += `Notes: ${log.notes}\n`;
-                emailBody += "\n----------------------------------------\n\n";
-            });
-
-            const subject = encodeURIComponent(`Yard Inspection Report - ${new Date().toISOString().split('T')[0]}`);
-            const body = encodeURIComponent(emailBody);
-            
-            window.location.href = `mailto:?subject=${subject}&body=${body}`;
+            let body = cloudLogs.map(l => `${l.unit} (${l.inspection_date}): ${l.notes}`).join('\n');
+            window.location.href = `mailto:?subject=Fleet Report&body=${encodeURIComponent(body)}`;
         }
-
-        // Initialize App
-        window.onload = function() {
-            loadLists(); 
-            fetchLogs(); // Pull down the live database immediately on load
-        };
     </script>
 </body>
 </html>
