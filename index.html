@@ -48,9 +48,11 @@
         .delete-btn { background: #ffc107; color: #000; width: auto; padding: 5px 10px; font-size: 12px; margin-left: 10px; height: fit-content;}
         .delete-btn:hover { background: #e0a800; }
         
-        .action-buttons { display: flex; gap: 10px; margin-bottom: 15px; }
-        .export-btn { background: #17a2b8; margin: 0;}
+        .action-buttons { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;}
+        .export-btn { background: #17a2b8; margin: 0; flex: 1;}
         .export-btn:hover { background: #138496; }
+        .email-btn { background: #6f42c1; margin: 0; flex: 1;}
+        .email-btn:hover { background: #59339d; }
     </style>
 </head>
 <body>
@@ -120,8 +122,9 @@
         <h3 style="margin-top: 0;">Cloud Yard Logs</h3>
         <div class="action-buttons">
             <button class="export-btn" onclick="exportToCSV()">Export to CSV</button>
-            <button class="export-btn" style="background: #28a745;" onclick="fetchLogs()">🔄 Refresh Logs</button>
+            <button class="email-btn" onclick="emailReport()">Email Report</button>
         </div>
+        <button class="export-btn" style="background: #28a745; margin-bottom: 15px;" onclick="fetchLogs()">🔄 Refresh Cloud Logs</button>
         <div id="log-container">Loading logs...</div>
     </div>
 
@@ -166,15 +169,24 @@
     <script>
         // ==========================================
         // INITIALIZE SUPABASE
-        // PASTE YOUR URL AND ANON KEY HERE
         // ==========================================
         const supabaseUrl = 'https://jksogknuoseclngdwnng.supabase.co';
         const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imprc29na251b3NlY2xuZ2R3bm5nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5ODM4MDksImV4cCI6MjA5MDU1OTgwOX0.k4Gc0UTJTmKk3jgQlkTtfXFmii7X2DV5geCSuVGU7eo';
-        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+        let supabase = null;
+
+        try {
+            if (supabaseKey !== 'YOUR_SUPABASE_ANON_KEY_GOES_HERE') {
+                supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+            } else {
+                console.warn("Supabase Anon Key is missing. Cloud saving disabled, but app buttons will still work locally.");
+            }
+        } catch(e) {
+            console.error("Supabase failed to initialize:", e);
+        }
 
         let currentTires = [];
         let activeTireId = null; 
-        let cloudLogs = []; // Stores the fetched data globally for exporting
+        let cloudLogs = []; 
 
         document.getElementById('inspectionDate').valueAsDate = new Date();
 
@@ -309,6 +321,11 @@
 
         // ----- SUPABASE: Insert Data -----
         async function saveInspection() {
+            if (!supabase) {
+                alert("Supabase keys are missing in the code! Cannot save to cloud. Please add your ANON KEY to the script.");
+                return;
+            }
+
             const company = document.getElementById('companyName').value.trim();
             const inspector = document.getElementById('inspectorName').value.trim();
             const unit = document.getElementById('unitNumber').value.toUpperCase();
@@ -349,13 +366,19 @@
         // ----- SUPABASE: Fetch Data -----
         async function fetchLogs() {
             const container = document.getElementById('log-container');
+            
+            if (!supabase) {
+                container.innerHTML = '<p style="color: #dc3545;">Supabase not connected. Add your keys to the code to fetch logs.</p>';
+                return;
+            }
+
             container.innerHTML = 'Loading from cloud...';
 
             const { data, error } = await supabase
                 .from('inspections')
                 .select('*')
                 .order('created_at', { ascending: false })
-                .limit(50); // Pulls the latest 50 logs
+                .limit(50);
 
             if (error) {
                 container.innerHTML = '<p style="color: red;">Error loading logs.</p>';
@@ -363,12 +386,13 @@
                 return;
             }
 
-            cloudLogs = data; // Store globally for CSV export
+            cloudLogs = data; 
             renderLogs(data);
         }
 
         // ----- SUPABASE: Delete Data -----
         async function deleteLog(id) {
+            if (!supabase) return;
             if(confirm('Delete this inspection from the cloud permanently?')) {
                 const { error } = await supabase.from('inspections').delete().eq('id', id);
                 if (error) {
@@ -419,6 +443,7 @@
             });
         }
 
+        // ----- Export and Email Features -----
         function exportToCSV() {
             if (cloudLogs.length === 0) { alert("No logs fetched to export."); return; }
 
@@ -443,6 +468,37 @@
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+        }
+
+        function emailReport() {
+            if (cloudLogs.length === 0) {
+                alert("No inspections to email yet.");
+                return;
+            }
+
+            let emailBody = "FLEET TIRE INSPECTION REPORT\n";
+            emailBody += "----------------------------------------\n\n";
+
+            cloudLogs.forEach(log => {
+                const failedTires = log.tires.filter(t => t.needsReplacement)
+                                             .map(t => `${t.position} (${t.reason})`).join(', ');
+                
+                const status = failedTires.length > 0 ? "⚠️ ISSUES FOUND" : "✅ All Passed";
+                
+                emailBody += `Company: ${log.company || "N/A"}\n`;
+                emailBody += `Inspected By: ${log.inspector || "N/A"}\n`;
+                emailBody += `Unit Number: ${log.unit}\n`;
+                emailBody += `Date: ${log.inspection_date}\n`;
+                emailBody += `Status: ${status}\n`;
+                if (failedTires.length > 0) emailBody += `Action Needed: ${failedTires}\n`;
+                if (log.notes) emailBody += `Notes: ${log.notes}\n`;
+                emailBody += "\n----------------------------------------\n\n";
+            });
+
+            const subject = encodeURIComponent(`Yard Inspection Report - ${new Date().toISOString().split('T')[0]}`);
+            const body = encodeURIComponent(emailBody);
+            
+            window.location.href = `mailto:?subject=${subject}&body=${body}`;
         }
 
         // Initialize App
