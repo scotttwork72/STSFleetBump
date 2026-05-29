@@ -70,7 +70,6 @@
         .email-btn { background: #6f42c1; margin: 0; flex: 1;}
         .email-btn:hover { background: #59339d; }
 
-        /* File Input Styling */
         input[type="file"] { padding: 5px; background: white; cursor: pointer; }
         .photo-links a { color: #0056b3; font-weight: bold; text-decoration: none; font-size: 12px; margin-right: 10px;}
         .photo-links a:hover { text-decoration: underline; }
@@ -150,13 +149,18 @@
                 <textarea id="unitNotes" rows="3" placeholder="e.g., Mud flap missing, body damage..."></textarea>
             </div>
 
-            <div class="form-group">
+            <div class="form-group" style="margin-bottom: 20px;">
                 <label for="photoUpload">📸 Attach Damage Photos (Optional)</label>
                 <input type="file" id="photoUpload" accept="image/*" multiple capture="environment">
                 <small style="display:block; color:#666; font-size: 11px; margin-top:3px;">Select files or open camera on mobile.</small>
             </div>
 
-            <button onclick="generateLayout()">Start Inspection</button>
+            <div id="editModeActionArea" style="display: none; flex-direction: column; gap: 10px; margin-bottom: 15px;">
+                <button id="topUpdateBtn" style="background: #007bff; border: 2px solid #0056b3;" onclick="saveInspection()">💾 Update Cloud Record</button>
+                <button style="background: #6c757d;" onclick="resetForm()">❌ Cancel Edit</button>
+            </div>
+
+            <button id="startInspBtn" onclick="generateLayout()">Start Inspection</button>
         </div>
 
         <div id="vehicle-layout" class="card">
@@ -274,7 +278,7 @@
         let currentTires = [];
         let activeTireId = null; 
         let cloudLogs = []; 
-        let editingRecordId = null; // Tracks if we are editing an existing record
+        let editingRecordId = null; 
 
         document.getElementById('inspectionDate').valueAsDate = new Date();
 
@@ -419,7 +423,7 @@
             document.getElementById('inspectionDate').value = log.inspection_date || '';
             document.getElementById('unitNotes').value = log.notes || '';
 
-            // Guess the layout based on the number of saved tires
+            // Guess the layout
             const tireCount = log.tires.length;
             let configKey = 'tractor-tandem'; 
             if (tireCount === 6) configKey = 'tractor-single';
@@ -434,7 +438,7 @@
             // Generate the blank layout
             generateLayout();
 
-            // Loop through saved tire data and apply the "red" replace marks
+            // Apply red marks
             log.tires.forEach(savedTire => {
                 if (savedTire.needsReplacement) {
                     const tireElement = document.querySelector(`.tire[data-position="${savedTire.position}"]`);
@@ -450,24 +454,20 @@
                 }
             });
 
-            // Adjust button to show it is updating an existing record
+            // SHOW TOP EDIT BUTTONS
+            document.getElementById('editModeActionArea').style.display = 'flex';
+            
+            // ADJUST THE START BUTTON
+            const startBtn = document.getElementById('startInspBtn');
+            startBtn.innerText = "🔄 Change Layout (Warning: Clears Tires)";
+            startBtn.style.background = "#ffc107";
+            startBtn.style.color = "#000";
+
+            // Adjust bottom button as a backup
             const submitBtn = document.getElementById('submitBtn');
             submitBtn.innerText = "Update Cloud Record";
             submitBtn.style.background = "#007bff";
             submitBtn.style.borderColor = "#0056b3";
-
-            // Show a cancel button
-            let cancelBtn = document.getElementById('cancelEditBtn');
-            if (!cancelBtn) {
-                cancelBtn = document.createElement('button');
-                cancelBtn.id = 'cancelEditBtn';
-                cancelBtn.innerText = "Cancel Edit";
-                cancelBtn.style.marginTop = "10px";
-                cancelBtn.style.background = "#6c757d";
-                cancelBtn.onclick = resetForm;
-                document.getElementById('vehicle-layout').appendChild(cancelBtn);
-            }
-            cancelBtn.style.display = 'block';
         }
 
         function resetForm() {
@@ -477,13 +477,20 @@
             document.getElementById('unitNotes').value = '';
             document.getElementById('photoUpload').value = '';
             
+            // HIDE TOP EDIT BUTTONS
+            document.getElementById('editModeActionArea').style.display = 'none';
+            
+            // RESET START BUTTON
+            const startBtn = document.getElementById('startInspBtn');
+            startBtn.innerText = "Start Inspection";
+            startBtn.style.background = "#0056b3";
+            startBtn.style.color = "white";
+
+            // Reset bottom button
             const submitBtn = document.getElementById('submitBtn');
             submitBtn.innerText = "Submit to Cloud";
             submitBtn.style.background = "#28a745";
             submitBtn.style.borderColor = "#1e7e34";
-
-            const cancelBtn = document.getElementById('cancelEditBtn');
-            if (cancelBtn) cancelBtn.style.display = 'none';
         }
 
         async function saveInspection() {
@@ -494,10 +501,12 @@
             const dateVal = document.getElementById('inspectionDate').value; 
             const photoInput = document.getElementById('photoUpload');
 
-            const btn = document.getElementById('submitBtn');
-            btn.disabled = true;
+            const btnBottom = document.getElementById('submitBtn');
+            const btnTop = document.getElementById('topUpdateBtn');
             
-            // If editing, preserve the old photos.
+            btnBottom.disabled = true;
+            if(btnTop) btnTop.disabled = true;
+            
             let uploadedUrls = [];
             if (editingRecordId) {
                 const logToEdit = cloudLogs.find(l => l.id === editingRecordId);
@@ -506,9 +515,10 @@
                 }
             }
 
-            // 1. UPLOAD ANY NEW PHOTOS
+            // UPLOAD NEW PHOTOS
             if (photoInput.files.length > 0) {
-                btn.innerText = `Uploading ${photoInput.files.length} Photo(s)...`;
+                btnBottom.innerText = `Uploading ${photoInput.files.length} Photo(s)...`;
+                if(btnTop) btnTop.innerText = `Uploading ${photoInput.files.length} Photo(s)...`;
                 
                 for (let i = 0; i < photoInput.files.length; i++) {
                     const file = photoInput.files[i];
@@ -525,17 +535,17 @@
                         alert("A photo failed to upload, but we will save the rest of the report.");
                     } else {
                         const { data: publicUrlData } = supabaseClient.storage.from('photos').getPublicUrl(filePath);
-                        uploadedUrls.push(publicUrlData.publicUrl); // Append new photo
+                        uploadedUrls.push(publicUrlData.publicUrl); 
                     }
                 }
             }
 
-            // 2. UPDATE OR INSERT RECORD
-            btn.innerText = "Saving Record to Database...";
+            btnBottom.innerText = "Saving Record to Database...";
+            if(btnTop) btnTop.innerText = "Saving Record to Database...";
+            
             let queryError = null;
 
             if (editingRecordId) {
-                // UPDATE existing record
                 const { error } = await supabaseClient
                     .from('inspections')
                     .update({ 
@@ -550,7 +560,6 @@
                     .eq('id', editingRecordId);
                 queryError = error;
             } else {
-                // INSERT new record
                 const { error } = await supabaseClient
                     .from('inspections')
                     .insert([{ 
@@ -574,7 +583,8 @@
                 fetchLogs(); 
             }
 
-            btn.disabled = false;
+            btnBottom.disabled = false;
+            if(btnTop) btnTop.disabled = false;
         }
 
         async function fetchLogs() {
