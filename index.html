@@ -57,8 +57,12 @@
         .log-meta { font-size: 12px; color: #666; font-weight: bold; text-transform: uppercase;}
         .log-issues { color: #dc3545; font-weight: bold; font-size: 13px;}
         .log-notes { font-size: 12px; color: #444; background: #f8f9fa; padding: 6px; border-radius: 4px; margin-top: 4px; border: 1px solid #eee; }
-        .delete-btn { background: #ffc107; color: #000; width: auto; padding: 5px 10px; font-size: 12px; margin-left: 10px; height: fit-content;}
-        .delete-btn:hover { background: #e0a800; }
+        
+        .log-actions { display: flex; gap: 5px; align-items: flex-start; margin-left: 10px; flex-direction: column;}
+        .edit-btn { background: #17a2b8; color: white; width: auto; padding: 5px 10px; font-size: 12px; height: fit-content;}
+        .edit-btn:hover { background: #138496; }
+        .delete-btn { background: #dc3545; color: white; width: auto; padding: 5px 10px; font-size: 12px; height: fit-content;}
+        .delete-btn:hover { background: #c82333; }
         
         .action-buttons { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;}
         .export-btn { background: #17a2b8; margin: 0; flex: 1;}
@@ -270,6 +274,7 @@
         let currentTires = [];
         let activeTireId = null; 
         let cloudLogs = []; 
+        let editingRecordId = null; // Tracks if we are editing an existing record
 
         document.getElementById('inspectionDate').valueAsDate = new Date();
 
@@ -397,6 +402,90 @@
             closeModal();
         }
 
+        // --- EDIT LOGIC ---
+        function editLog(id) {
+            const log = cloudLogs.find(l => l.id === id);
+            if (!log) return;
+
+            editingRecordId = id;
+
+            // Scroll user up to the form
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+
+            // Refill form data
+            document.getElementById('companyName').value = log.company || '';
+            document.getElementById('inspectorName').value = log.inspector || '';
+            document.getElementById('unitNumber').value = log.unit || '';
+            document.getElementById('inspectionDate').value = log.inspection_date || '';
+            document.getElementById('unitNotes').value = log.notes || '';
+
+            // Guess the layout based on the number of saved tires
+            const tireCount = log.tires.length;
+            let configKey = 'tractor-tandem'; 
+            if (tireCount === 6) configKey = 'tractor-single';
+            else if (tireCount === 4) configKey = 'trailer-pup'; 
+            else if (tireCount === 8) configKey = 'trailer-tandem';
+            else if (tireCount === 12) configKey = 'trailer-tri';
+            else if (tireCount === 18) configKey = 'combo-standard';
+            else if (tireCount === 26) configKey = 'combo-doubles';
+            
+            document.getElementById('configSelect').value = configKey;
+
+            // Generate the blank layout
+            generateLayout();
+
+            // Loop through saved tire data and apply the "red" replace marks
+            log.tires.forEach(savedTire => {
+                if (savedTire.needsReplacement) {
+                    const tireElement = document.querySelector(`.tire[data-position="${savedTire.position}"]`);
+                    if (tireElement) {
+                        tireElement.dataset.replace = "true";
+                        tireElement.classList.add('replace');
+                        const localTire = currentTires.find(t => t.position === savedTire.position);
+                        if (localTire) {
+                            localTire.needsReplacement = true;
+                            localTire.reason = savedTire.reason;
+                        }
+                    }
+                }
+            });
+
+            // Adjust button to show it is updating an existing record
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.innerText = "Update Cloud Record";
+            submitBtn.style.background = "#007bff";
+            submitBtn.style.borderColor = "#0056b3";
+
+            // Show a cancel button
+            let cancelBtn = document.getElementById('cancelEditBtn');
+            if (!cancelBtn) {
+                cancelBtn = document.createElement('button');
+                cancelBtn.id = 'cancelEditBtn';
+                cancelBtn.innerText = "Cancel Edit";
+                cancelBtn.style.marginTop = "10px";
+                cancelBtn.style.background = "#6c757d";
+                cancelBtn.onclick = resetForm;
+                document.getElementById('vehicle-layout').appendChild(cancelBtn);
+            }
+            cancelBtn.style.display = 'block';
+        }
+
+        function resetForm() {
+            editingRecordId = null;
+            document.getElementById('vehicle-layout').style.display = 'none';
+            document.getElementById('unitNumber').value = '';
+            document.getElementById('unitNotes').value = '';
+            document.getElementById('photoUpload').value = '';
+            
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.innerText = "Submit to Cloud";
+            submitBtn.style.background = "#28a745";
+            submitBtn.style.borderColor = "#1e7e34";
+
+            const cancelBtn = document.getElementById('cancelEditBtn');
+            if (cancelBtn) cancelBtn.style.display = 'none';
+        }
+
         async function saveInspection() {
             const company = document.getElementById('companyName').value.trim();
             const inspector = document.getElementById('inspectorName').value.trim();
@@ -408,9 +497,16 @@
             const btn = document.getElementById('submitBtn');
             btn.disabled = true;
             
+            // If editing, preserve the old photos.
             let uploadedUrls = [];
+            if (editingRecordId) {
+                const logToEdit = cloudLogs.find(l => l.id === editingRecordId);
+                if (logToEdit && logToEdit.photo_urls) {
+                    uploadedUrls = [...logToEdit.photo_urls];
+                }
+            }
 
-            // 1. UPLOAD PHOTOS FIRST (IF ANY)
+            // 1. UPLOAD ANY NEW PHOTOS
             if (photoInput.files.length > 0) {
                 btn.innerText = `Uploading ${photoInput.files.length} Photo(s)...`;
                 
@@ -418,7 +514,7 @@
                     const file = photoInput.files[i];
                     const fileExt = file.name.split('.').pop();
                     const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-                    const filePath = `${currentUser.id}/${fileName}`; // Groups photos by user
+                    const filePath = `${currentUser.id}/${fileName}`; 
                     
                     const { data: uploadData, error: uploadError } = await supabaseClient.storage
                         .from('photos')
@@ -428,20 +524,36 @@
                         console.error("Photo upload error:", uploadError);
                         alert("A photo failed to upload, but we will save the rest of the report.");
                     } else {
-                        // Get public URL to view it later
                         const { data: publicUrlData } = supabaseClient.storage.from('photos').getPublicUrl(filePath);
-                        uploadedUrls.push(publicUrlData.publicUrl);
+                        uploadedUrls.push(publicUrlData.publicUrl); // Append new photo
                     }
                 }
             }
 
-            // 2. SAVE DATABASE RECORD
+            // 2. UPDATE OR INSERT RECORD
             btn.innerText = "Saving Record to Database...";
-            
-            const { data, error } = await supabaseClient
-                .from('inspections')
-                .insert([
-                    { 
+            let queryError = null;
+
+            if (editingRecordId) {
+                // UPDATE existing record
+                const { error } = await supabaseClient
+                    .from('inspections')
+                    .update({ 
+                        company: company, 
+                        inspector: inspector, 
+                        unit: unit, 
+                        inspection_date: dateVal, 
+                        notes: notes, 
+                        tires: currentTires,
+                        photo_urls: uploadedUrls 
+                    })
+                    .eq('id', editingRecordId);
+                queryError = error;
+            } else {
+                // INSERT new record
+                const { error } = await supabaseClient
+                    .from('inspections')
+                    .insert([{ 
                         company: company, 
                         inspector: inspector, 
                         unit: unit, 
@@ -450,21 +562,18 @@
                         tires: currentTires,
                         user_id: currentUser.id,
                         photo_urls: uploadedUrls 
-                    }
-                ]);
+                    }]);
+                queryError = error;
+            }
 
-            if (error) {
-                alert("Error saving: " + error.message);
-                console.error(error);
+            if (queryError) {
+                alert("Error saving: " + queryError.message);
+                console.error(queryError);
             } else {
-                document.getElementById('vehicle-layout').style.display = 'none';
-                document.getElementById('unitNumber').value = '';
-                document.getElementById('unitNotes').value = '';
-                document.getElementById('photoUpload').value = ''; // Clear file input
+                resetForm();
                 fetchLogs(); 
             }
 
-            btn.innerText = "Submit to Cloud";
             btn.disabled = false;
         }
 
@@ -521,7 +630,6 @@
                 if (log.inspector) metaInfo.push(`Insp: ${log.inspector}`);
                 const metaHtml = metaInfo.length > 0 ? `<span class="log-meta">${metaInfo.join(' | ')}</span>` : '';
 
-                // Build HTML for Photo Links if they exist
                 let photosHtml = '';
                 if (log.photo_urls && log.photo_urls.length > 0) {
                     photosHtml = '<div class="photo-links" style="margin-top: 6px;">';
@@ -540,7 +648,10 @@
                         ${notesHtml}
                         ${photosHtml}
                     </div>
-                    <button class="delete-btn" onclick="deleteLog('${log.id}')">Del</button>
+                    <div class="log-actions">
+                        <button class="edit-btn" onclick="editLog('${log.id}')">Edit</button>
+                        <button class="delete-btn" onclick="deleteLog('${log.id}')">Del</button>
+                    </div>
                 `;
                 container.appendChild(logDiv);
             });
