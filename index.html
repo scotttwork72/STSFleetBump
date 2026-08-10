@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Commercial Fleet Tire Bumper</title>
+    <!-- Supabase Library -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; background-color: #f4f4f9; }
@@ -77,6 +78,7 @@
 </head>
 <body>
 
+    <!-- AUTHENTICATION SECTION -->
     <div id="auth-section">
         <div class="card auth-box">
             <h2 style="text-align: center; margin-top: 0;">Fleet Login</h2>
@@ -96,6 +98,7 @@
         </div>
     </div>
 
+    <!-- MAIN APP SECTION -->
     <div id="app-section">
         <div class="header-bar">
             <h2 style="margin: 0;">Fleet Tire Bumper</h2>
@@ -111,6 +114,10 @@
             <div class="form-group" style="margin-top: 15px;">
                 <label for="companyName">Company Name</label>
                 <input type="text" id="companyName" list="companyList" placeholder="Select or type company...">
+            </div>
+            <div class="form-group">
+                <label for="companyAddress">Company Address</label>
+                <input type="text" id="companyAddress" placeholder="e.g., 123 Logistics Way, Yard 4">
             </div>
             <div class="form-group">
                 <label for="inspectorName">Inspected By</label>
@@ -155,6 +162,7 @@
                 <small style="display:block; color:#666; font-size: 11px; margin-top:3px;">Select files or open camera on mobile.</small>
             </div>
 
+            <!-- TOP EDIT BUTTONS (Hidden by default) -->
             <div id="editModeActionArea" style="display: none; flex-direction: column; gap: 10px; margin-bottom: 15px;">
                 <button id="topUpdateBtn" style="background: #007bff; border: 2px solid #0056b3;" onclick="saveInspection()">💾 Update Cloud Record</button>
                 <button style="background: #6c757d;" onclick="resetForm()">❌ Cancel Edit</button>
@@ -183,6 +191,7 @@
         </div>
     </div>
 
+    <!-- Modals -->
     <div id="settingsModal" class="modal-overlay">
         <div class="modal-content">
             <h4>Manage Dropdown Lists</h4>
@@ -413,17 +422,15 @@
 
             editingRecordId = id;
 
-            // Scroll user up to the form
             window.scrollTo({ top: 0, behavior: 'smooth' });
 
-            // Refill form data
             document.getElementById('companyName').value = log.company || '';
+            document.getElementById('companyAddress').value = log.company_address || '';
             document.getElementById('inspectorName').value = log.inspector || '';
             document.getElementById('unitNumber').value = log.unit || '';
             document.getElementById('inspectionDate').value = log.inspection_date || '';
             document.getElementById('unitNotes').value = log.notes || '';
 
-            // Guess the layout
             const tireCount = log.tires.length;
             let configKey = 'tractor-tandem'; 
             if (tireCount === 6) configKey = 'tractor-single';
@@ -435,10 +442,8 @@
             
             document.getElementById('configSelect').value = configKey;
 
-            // Generate the blank layout
             generateLayout();
 
-            // Apply red marks
             log.tires.forEach(savedTire => {
                 if (savedTire.needsReplacement) {
                     const tireElement = document.querySelector(`.tire[data-position="${savedTire.position}"]`);
@@ -454,16 +459,13 @@
                 }
             });
 
-            // SHOW TOP EDIT BUTTONS
             document.getElementById('editModeActionArea').style.display = 'flex';
             
-            // ADJUST THE START BUTTON
             const startBtn = document.getElementById('startInspBtn');
             startBtn.innerText = "🔄 Change Layout (Warning: Clears Tires)";
             startBtn.style.background = "#ffc107";
             startBtn.style.color = "#000";
 
-            // Adjust bottom button as a backup
             const submitBtn = document.getElementById('submitBtn');
             submitBtn.innerText = "Update Cloud Record";
             submitBtn.style.background = "#007bff";
@@ -473,20 +475,18 @@
         function resetForm() {
             editingRecordId = null;
             document.getElementById('vehicle-layout').style.display = 'none';
+            document.getElementById('companyAddress').value = '';
             document.getElementById('unitNumber').value = '';
             document.getElementById('unitNotes').value = '';
             document.getElementById('photoUpload').value = '';
             
-            // HIDE TOP EDIT BUTTONS
             document.getElementById('editModeActionArea').style.display = 'none';
             
-            // RESET START BUTTON
             const startBtn = document.getElementById('startInspBtn');
             startBtn.innerText = "Start Inspection";
             startBtn.style.background = "#0056b3";
             startBtn.style.color = "white";
 
-            // Reset bottom button
             const submitBtn = document.getElementById('submitBtn');
             submitBtn.innerText = "Submit to Cloud";
             submitBtn.style.background = "#28a745";
@@ -495,6 +495,7 @@
 
         async function saveInspection() {
             const company = document.getElementById('companyName').value.trim();
+            const address = document.getElementById('companyAddress').value.trim();
             const inspector = document.getElementById('inspectorName').value.trim();
             const unit = document.getElementById('unitNumber').value.toUpperCase();
             const notes = document.getElementById('unitNotes').value.trim();
@@ -515,7 +516,6 @@
                 }
             }
 
-            // UPLOAD NEW PHOTOS
             if (photoInput.files.length > 0) {
                 btnBottom.innerText = `Uploading ${photoInput.files.length} Photo(s)...`;
                 if(btnTop) btnTop.innerText = `Uploading ${photoInput.files.length} Photo(s)...`;
@@ -549,7 +549,8 @@
                 const { error } = await supabaseClient
                     .from('inspections')
                     .update({ 
-                        company: company, 
+                        company: company,
+                        company_address: address,
                         inspector: inspector, 
                         unit: unit, 
                         inspection_date: dateVal, 
@@ -563,7 +564,8 @@
                 const { error } = await supabaseClient
                     .from('inspections')
                     .insert([{ 
-                        company: company, 
+                        company: company,
+                        company_address: address,
                         inspector: inspector, 
                         unit: unit, 
                         inspection_date: dateVal, 
@@ -637,6 +639,7 @@
                 
                 let metaInfo = [];
                 if (log.company) metaInfo.push(log.company);
+                if (log.company_address) metaInfo.push(log.company_address);
                 if (log.inspector) metaInfo.push(`Insp: ${log.inspector}`);
                 const metaHtml = metaInfo.length > 0 ? `<span class="log-meta">${metaInfo.join(' | ')}</span>` : '';
 
@@ -670,17 +673,18 @@
         function exportToCSV() {
             if (cloudLogs.length === 0) { alert("No logs fetched to export."); return; }
 
-            let csvContent = "Inspection ID,Company Name,Inspected By,Unit Number,Date,Status,Failed Tire Details,Notes,Photo Links\n";
+            let csvContent = "Inspection ID,Company Name,Company Address,Inspected By,Unit Number,Date,Status,Failed Tire Details,Notes,Photo Links\n";
 
             cloudLogs.forEach(log => {
                 const failedTires = log.tires.filter(t => t.needsReplacement).map(t => `${t.position} (${t.reason})`).join(' | ');
                 const status = failedTires.length > 0 ? "Issues Found" : "All Passed";
                 const safeNotes = (log.notes || "").replace(/"/g, '""');
                 const safeCompany = (log.company || "").replace(/"/g, '""');
+                const safeAddress = (log.company_address || "").replace(/"/g, '""');
                 const safeInspector = (log.inspector || "").replace(/"/g, '""');
                 const photoLinks = (log.photo_urls || []).join(' | ');
                 
-                const row = `"${log.id}","${safeCompany}","${safeInspector}","${log.unit}","${log.inspection_date}","${status}","${failedTires}","${safeNotes}","${photoLinks}"`;
+                const row = `"${log.id}","${safeCompany}","${safeAddress}","${safeInspector}","${log.unit}","${log.inspection_date}","${status}","${failedTires}","${safeNotes}","${photoLinks}"`;
                 csvContent += row + "\n";
             });
 
@@ -710,6 +714,7 @@
                 const status = failedTires.length > 0 ? "⚠️ ISSUES FOUND" : "✅ All Passed";
                 
                 emailBody += `Company: ${log.company || "N/A"}\n`;
+                if (log.company_address) emailBody += `Address: ${log.company_address}\n`;
                 emailBody += `Inspected By: ${log.inspector || "N/A"}\n`;
                 emailBody += `Unit Number: ${log.unit}\n`;
                 emailBody += `Date: ${log.inspection_date}\n`;
