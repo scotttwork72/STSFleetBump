@@ -321,7 +321,7 @@
             msgBox.innerText = "Logging in...";
             const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
             if (error) { msgBox.style.color = "#dc3545"; msgBox.innerText = error.message; }
-            else msgBox.innerText = "";
+            else { msgBox.innerText = ""; }
         }
 
         async function handleLogout() { await supabaseClient.auth.signOut(); }
@@ -431,4 +431,357 @@
             closeSettingsModal();
         }
 
-        function generateLayout
+        function generateLayout() {
+            const unit = document.getElementById('unitNumber').value;
+            const configKey = document.getElementById('configSelect').value;
+            const dateVal = document.getElementById('inspectionDate').value;
+            
+            if (!unit || !dateVal) { alert('Please fill in Unit Number and Date.'); return; }
+
+            document.getElementById('vehicle-layout').style.display = 'flex';
+            document.getElementById('layout-title').innerText = `Inspecting: ${unit.toUpperCase()}`;
+            
+            const container = document.getElementById('axles-container');
+            container.innerHTML = ''; 
+            currentTires = [];
+
+            const layoutPlan = layouts[configKey];
+            let axleCounter = 1;
+
+            layoutPlan.forEach(item => {
+                if (item === 'gap') {
+                    const hitch = document.createElement('div');
+                    hitch.className = 'hitch';
+                    container.appendChild(hitch);
+                } else {
+                    const axleDiv = document.createElement('div');
+                    axleDiv.className = 'axle';
+                    
+                    const chassis = document.createElement('div');
+                    chassis.className = 'chassis';
+                    axleDiv.appendChild(chassis);
+
+                    const leftGroup = document.createElement('div');
+                    leftGroup.className = 'tire-group';
+                    if (item === 4) leftGroup.appendChild(createTire(`A${axleCounter}-LO`, 'L-Out'));
+                    leftGroup.appendChild(createTire(`A${axleCounter}-LI`, item <= 2 ? 'L' : 'L-In'));
+                    axleDiv.appendChild(leftGroup);
+
+                    const rightGroup = document.createElement('div');
+                    rightGroup.className = 'tire-group';
+                    rightGroup.appendChild(createTire(`A${axleCounter}-RI`, item <= 2 ? 'R' : 'R-In'));
+                    if (item === 4) rightGroup.appendChild(createTire(`A${axleCounter}-RO`, 'R-Out'));
+                    axleDiv.appendChild(rightGroup);
+
+                    container.appendChild(axleDiv);
+                    axleCounter++;
+                }
+            });
+        }
+
+        function createTire(positionId, label) {
+            const tire = document.createElement('div');
+            tire.className = 'tire';
+            tire.innerHTML = label.replace('-', '<br>');
+            tire.dataset.position = positionId;
+            tire.dataset.replace = "false";
+            
+            currentTires.push({ position: positionId, needsReplacement: false, reason: "", treadDepth: "", tireSize: "" });
+
+            tire.onclick = function() {
+                activeTireId = positionId;
+                const tireObj = currentTires.find(t => t.position === positionId);
+                
+                document.getElementById('modalTirePosition').innerText = `Position: ${positionId}`;
+                document.getElementById('tireSizeInput').value = tireObj.tireSize || '';
+                document.getElementById('applyAllSizes').checked = false;
+                document.getElementById('treadDepthInput').value = tireObj.treadDepth || '';
+                document.getElementById('issueSelect').value = tireObj.reason || '';
+                document.getElementById('issueModal').style.display = 'flex';
+            };
+            return tire;
+        }
+
+        function closeModal() { document.getElementById('issueModal').style.display = 'none'; activeTireId = null; }
+
+        function saveTireDetails() {
+            if (!activeTireId) return;
+            const sizeVal = document.getElementById('tireSizeInput').value.trim();
+            const applyAll = document.getElementById('applyAllSizes').checked;
+            const treadVal = document.getElementById('treadDepthInput').value.trim();
+            const reasonVal = document.getElementById('issueSelect').value;
+
+            if (applyAll) {
+                currentTires.forEach(t => {
+                    t.tireSize = sizeVal;
+                    const el = document.querySelector(`.tire[data-position="${t.position}"]`);
+                    if (el) {
+                        if (t.treadDepth || sizeVal) el.classList.add('has-data');
+                        else el.classList.remove('has-data');
+                    }
+                });
+            }
+
+            const tireElement = document.querySelector(`.tire[data-position="${activeTireId}"]`);
+            const tireObj = currentTires.find(t => t.position === activeTireId);
+
+            tireObj.tireSize = sizeVal;
+            tireObj.treadDepth = treadVal;
+            tireObj.reason = reasonVal;
+            
+            if (reasonVal) {
+                tireObj.needsReplacement = true;
+                tireElement.dataset.replace = "true";
+                tireElement.classList.add('replace');
+            } else {
+                tireObj.needsReplacement = false;
+                tireElement.dataset.replace = "false";
+                tireElement.classList.remove('replace');
+            }
+
+            if (treadVal || sizeVal) {
+                tireElement.classList.add('has-data');
+            } else {
+                tireElement.classList.remove('has-data');
+            }
+
+            closeModal();
+        }
+
+        function editLog(id) {
+            const log = cloudLogs.find(l => l.id === id);
+            if (!log) return;
+
+            editingRecordId = id;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+
+            document.getElementById('companyName').value = log.company || '';
+            document.getElementById('companyAddress').value = log.company_address || '';
+            document.getElementById('inspectorName').value = log.inspector || '';
+            document.getElementById('unitNumber').value = log.unit || '';
+            document.getElementById('inspectionDate').value = log.inspection_date || '';
+            document.getElementById('unitNotes').value = log.notes || '';
+
+            const tireCount = log.tires.length;
+            let configKey = 'tractor-tandem'; 
+            if (tireCount === 4) configKey = 'light-truck';
+            else if (tireCount === 6) configKey = 'tractor-single';
+            else if (tireCount === 4 && log.tires.some(t => t.position.includes('A1-LO'))) configKey = 'trailer-pup'; 
+            else if (tireCount === 8) configKey = 'trailer-tandem';
+            else if (tireCount === 12) configKey = 'trailer-tri';
+            else if (tireCount === 18) configKey = 'combo-standard';
+            else if (tireCount === 26) configKey = 'combo-doubles';
+            
+            document.getElementById('configSelect').value = configKey;
+            generateLayout();
+
+            log.tires.forEach(savedTire => {
+                const tireElement = document.querySelector(`.tire[data-position="${savedTire.position}"]`);
+                if (tireElement) {
+                    const localTire = currentTires.find(t => t.position === savedTire.position);
+                    if (localTire) {
+                        localTire.needsReplacement = savedTire.needsReplacement || false;
+                        localTire.reason = savedTire.reason || "";
+                        localTire.treadDepth = savedTire.treadDepth || "";
+                        localTire.tireSize = savedTire.tireSize || "";
+
+                        if (localTire.needsReplacement) {
+                            tireElement.dataset.replace = "true";
+                            tireElement.classList.add('replace');
+                        }
+                        if (localTire.treadDepth || localTire.tireSize) {
+                            tireElement.classList.add('has-data');
+                        }
+                    }
+                }
+            });
+
+            document.getElementById('editModeActionArea').style.display = 'flex';
+            
+            const startBtn = document.getElementById('startInspBtn');
+            startBtn.innerText = "🔄 Change Layout (Warning: Clears Tires)";
+            startBtn.style.background = "#ffc107";
+            startBtn.style.color = "#000";
+
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.innerText = "Update Cloud Record";
+            submitBtn.style.background = "#007bff";
+            submitBtn.style.borderColor = "#0056b3";
+        }
+
+        function resetForm() {
+            editingRecordId = null;
+            document.getElementById('vehicle-layout').style.display = 'none';
+            document.getElementById('companyAddress').value = '';
+            document.getElementById('unitNumber').value = '';
+            document.getElementById('unitNotes').value = '';
+            document.getElementById('photoUpload').value = '';
+            
+            document.getElementById('editModeActionArea').style.display = 'none';
+            
+            const startBtn = document.getElementById('startInspBtn');
+            startBtn.innerText = "Start Inspection";
+            startBtn.style.background = "#0056b3";
+            startBtn.style.color = "white";
+
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.innerText = "Submit to Cloud";
+            submitBtn.style.background = "#28a745";
+            submitBtn.style.borderColor = "#1e7e34";
+        }
+
+        async function saveInspection() {
+            const company = document.getElementById('companyName').value.trim();
+            const address = document.getElementById('companyAddress').value.trim();
+            const inspector = document.getElementById('inspectorName').value.trim();
+            const unit = document.getElementById('unitNumber').value.toUpperCase();
+            const notes = document.getElementById('unitNotes').value.trim();
+            const dateVal = document.getElementById('inspectionDate').value; 
+            const photoInput = document.getElementById('photoUpload');
+
+            const btnBottom = document.getElementById('submitBtn');
+            const btnTop = document.getElementById('topUpdateBtn');
+            
+            btnBottom.disabled = true;
+            if(btnTop) btnTop.disabled = true;
+            
+            let uploadedUrls = [];
+            if (editingRecordId) {
+                const logToEdit = cloudLogs.find(l => l.id === editingRecordId);
+                if (logToEdit && logToEdit.photo_urls) {
+                    uploadedUrls = [...logToEdit.photo_urls];
+                }
+            }
+
+            if (photoInput.files.length > 0) {
+                btnBottom.innerText = `Uploading ${photoInput.files.length} Photo(s)...`;
+                if(btnTop) btnTop.innerText = `Uploading ${photoInput.files.length} Photo(s)...`;
+                
+                for (let i = 0; i < photoInput.files.length; i++) {
+                    const file = photoInput.files[i];
+                    const fileExt = file.name.split('.').pop();
+                    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+                    const filePath = `${currentUser.id}/${fileName}`; 
+                    
+                    const { data: uploadData, error: uploadError } = await supabaseClient.storage
+                        .from('photos')
+                        .upload(filePath, file);
+                        
+                    if (uploadError) {
+                        console.error("Photo upload error:", uploadError);
+                        alert("A photo failed to upload, but we will save the rest of the report.");
+                    } else {
+                        const { data: publicUrlData } = supabaseClient.storage.from('photos').getPublicUrl(filePath);
+                        uploadedUrls.push(publicUrlData.publicUrl); 
+                    }
+                }
+            }
+
+            btnBottom.innerText = "Saving Record to Database...";
+            if(btnTop) btnTop.innerText = "Saving Record to Database...";
+            
+            let queryError = null;
+
+            if (editingRecordId) {
+                const { error } = await supabaseClient
+                    .from('inspections')
+                    .update({ 
+                        company: company,
+                        company_address: address,
+                        inspector: inspector, 
+                        unit: unit, 
+                        inspection_date: dateVal, 
+                        notes: notes, 
+                        tires: currentTires,
+                        photo_urls: uploadedUrls 
+                    })
+                    .eq('id', editingRecordId);
+                queryError = error;
+            } else {
+                const { error } = await supabaseClient
+                    .from('inspections')
+                    .insert([{ 
+                        company: company,
+                        company_address: address,
+                        inspector: inspector, 
+                        unit: unit, 
+                        inspection_date: dateVal, 
+                        notes: notes, 
+                        tires: currentTires,
+                        user_id: currentUser.id,
+                        photo_urls: uploadedUrls 
+                    }]);
+                queryError = error;
+            }
+
+            if (queryError) {
+                alert("Error saving: " + queryError.message);
+                console.error(queryError);
+            } else {
+                resetForm();
+                fetchLogs(); 
+            }
+
+            btnBottom.disabled = false;
+            if(btnTop) btnTop.disabled = false;
+        }
+
+        async function fetchLogs() {
+            const container = document.getElementById('log-container');
+            container.innerHTML = 'Loading your logs...';
+
+            const { data, error } = await supabaseClient
+                .from('inspections')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(50);
+
+            if (error) {
+                container.innerHTML = '<p style="color: red;">Error loading logs: ' + error.message + '</p>';
+                return;
+            }
+
+            cloudLogs = data; 
+            renderLogs(data);
+        }
+
+        async function deleteLog(id) {
+            if(confirm('Delete this inspection permanently?')) {
+                const { error } = await supabaseClient.from('inspections').delete().eq('id', id);
+                if (error) alert("Error deleting: " + error.message);
+                else fetchLogs();
+            }
+        }
+
+        function renderLogs(logs) {
+            const container = document.getElementById('log-container');
+            container.innerHTML = '';
+
+            if (logs.length === 0) {
+                container.innerHTML = '<p style="color: #666;">No inspections found for this account.</p>';
+                return;
+            }
+
+            logs.forEach(log => {
+                const logDiv = document.createElement('div');
+                logDiv.className = 'log-entry';
+                
+                const failedTires = log.tires.filter(t => t.needsReplacement).map(t => `${t.position} [${t.reason}]`);
+                const tireDetails = log.tires.filter(t => t.treadDepth || t.tireSize)
+                    .map(t => `${t.position}: ${t.tireSize || 'Size N/A'} (${t.treadDepth ? t.treadDepth + '/32"' : 'Depth N/A'})`).join(', ');
+
+                const statusHtml = failedTires.length > 0 
+                    ? `<span class="log-issues">Replace: ${failedTires.join(', ')}</span>` 
+                    : `<span style="color: #28a745; font-weight: bold; font-size: 13px;">All Passed</span>`;
+
+                const detailsHtml = tireDetails ? `<div style="font-size: 12px; color: #333; margin-top: 2px;"><strong>Tires:</strong> ${tireDetails}</div>` : '';
+                const notesHtml = log.notes ? `<div class="log-notes"><strong>Notes:</strong> ${log.notes}</div>` : '';
+                
+                let metaInfo = [];
+                if (log.company) metaInfo.push(log.company);
+                if (log.company_address) metaInfo.push(log.company_address);
+                if (log.inspector) metaInfo.push(`Insp: ${log.inspector}`);
+                const metaHtml = metaInfo.length > 0 ? `<span class="log-meta">${metaInfo.join(' | ')}</span>` : '';
+
+                let photosHtml = '';
+                if (log
