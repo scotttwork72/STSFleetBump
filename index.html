@@ -320,8 +320,13 @@
             if (!email || !password) { msgBox.innerText = "Please enter email and password."; return; }
             msgBox.innerText = "Logging in...";
             const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
-            if (error) { msgBox.style.color = "#dc3545"; msgBox.innerText = error.message; }
-            else { msgBox.innerText = ""; }
+            if (error) { 
+                msgBox.style.color = "#dc3545"; 
+                msgBox.innerText = error.message; 
+            } else { 
+                msgBox.style.color = "#28a745"; 
+                msgBox.innerText = ""; 
+            }
         }
 
         async function handleLogout() { await supabaseClient.auth.signOut(); }
@@ -784,4 +789,104 @@
                 const metaHtml = metaInfo.length > 0 ? `<span class="log-meta">${metaInfo.join(' | ')}</span>` : '';
 
                 let photosHtml = '';
-                if (log
+                if (log.photo_urls && log.photo_urls.length > 0) {
+                    photosHtml = '<div class="photo-links" style="margin-top: 6px;">';
+                    log.photo_urls.forEach((url, index) => {
+                        photosHtml += `<a href="${url}" target="_blank">📸 Photo ${index + 1}</a>`;
+                    });
+                    photosHtml += '</div>';
+                }
+
+                logDiv.innerHTML = `
+                    <div class="log-details">
+                        ${metaHtml}
+                        <strong>${log.unit}</strong>
+                        <span style="font-size: 11px; color: #666;">Date: ${log.inspection_date}</span>
+                        ${statusHtml}
+                        ${detailsHtml}
+                        ${notesHtml}
+                        ${photosHtml}
+                    </div>
+                    <div class="log-actions">
+                        <button class="edit-btn" onclick="editLog('${log.id}')">Edit</button>
+                        <button class="delete-btn" onclick="deleteLog('${log.id}')">Del</button>
+                    </div>
+                `;
+                container.appendChild(logDiv);
+            });
+        }
+
+        function exportToCSV() {
+            if (cloudLogs.length === 0) { alert("No logs fetched to export."); return; }
+
+            let csvContent = "Inspection ID,Company Name,Company Address,Inspected By,Unit Number,Date,Status,Tire Sizes & Treads,Failed Tire Details,Notes,Photo Links\n";
+
+            cloudLogs.forEach(log => {
+                const failedTires = log.tires.filter(t => t.needsReplacement).map(t => `${t.position} (${t.reason})`).join(' | ');
+                const tireDetails = log.tires.filter(t => t.treadDepth || t.tireSize)
+                    .map(t => `${t.position}[Size:${t.tireSize || 'N/A'}, Depth:${t.treadDepth || 'N/A'}]`).join(' | ');
+                const status = failedTires.length > 0 ? "Issues Found" : "All Passed";
+                const safeNotes = (log.notes || "").replace(/"/g, '""');
+                const safeCompany = (log.company || "").replace(/"/g, '""');
+                const safeAddress = (log.company_address || "").replace(/"/g, '""');
+                const safeInspector = (log.inspector || "").replace(/"/g, '""');
+                const photoLinks = (log.photo_urls || []).join(' | ');
+                
+                const row = `"${log.id}","${safeCompany}","${safeAddress}","${safeInspector}","${log.unit}","${log.inspection_date}","${status}","${tireDetails}","${failedTires}","${safeNotes}","${photoLinks}"`;
+                csvContent += row + "\n";
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", `my_fleet_inspections_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function emailReport() {
+            if (cloudLogs.length === 0) {
+                alert("No inspections to email yet.");
+                return;
+            }
+
+            let emailBody = "FLEET TIRE INSPECTION REPORT\n";
+            emailBody += "----------------------------------------\n\n";
+
+            cloudLogs.forEach(log => {
+                const failedTires = log.tires.filter(t => t.needsReplacement)
+                                             .map(t => `${t.position} (${t.reason})`).join(', ');
+                const tireDetails = log.tires.filter(t => t.treadDepth || t.tireSize)
+                                             .map(t => `${t.position}: Size [${t.tireSize || 'N/A'}], Depth [${t.treadDepth ? t.treadDepth + '/32"' : 'N/A'}]`).join('\n');
+                
+                const status = failedTires.length > 0 ? "⚠️ ISSUES FOUND" : "✅ All Passed";
+                
+                emailBody += `Company: ${log.company || "N/A"}\n`;
+                if (log.company_address) emailBody += `Address: ${log.company_address}\n`;
+                emailBody += `Inspected By: ${log.inspector || "N/A"}\n`;
+                emailBody += `Unit Number: ${log.unit}\n`;
+                emailBody += `Date: ${log.inspection_date}\n`;
+                emailBody += `Status: ${status}\n`;
+                if (tireDetails) emailBody += `Tire Details:\n${tireDetails}\n`;
+                if (failedTires.length > 0) emailBody += `Action Needed: ${failedTires}\n`;
+                if (log.notes) emailBody += `Notes: ${log.notes}\n`;
+                
+                if (log.photo_urls && log.photo_urls.length > 0) {
+                    emailBody += `Photos:\n`;
+                    log.photo_urls.forEach((url, i) => {
+                        emailBody += ` - Image ${i + 1}: ${url}\n`;
+                    });
+                }
+                emailBody += "\n----------------------------------------\n\n";
+            });
+
+            const subject = encodeURIComponent(`Yard Inspection Report - ${new Date().toISOString().split('T')[0]}`);
+            const body = encodeURIComponent(emailBody);
+            
+            window.location.href = `mailto:?subject=${subject}&body=${body}`;
+        }
+    </script>
+</body>
+</html>
