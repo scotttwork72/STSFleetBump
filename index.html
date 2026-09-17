@@ -48,7 +48,7 @@
         .tire { width: 35px; height: 65px; background: #28a745; color: white; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; cursor: pointer; user-select: none; transition: background 0.2s, transform 0.1s; border: 2px solid #1e7e34; text-align: center; line-height: 1.1;}
         .tire:active { transform: scale(0.95); }
         .tire.replace { background: #dc3545; border-color: #bd2130; }
-        .tire.has-tread { border-color: #0056b3; }
+        .tire.has-data { border-color: #0056b3; }
 
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; display: none; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box;}
         .modal-content { background: white; padding: 20px; border-radius: 8px; width: 100%; max-width: 350px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); max-height: 90vh; overflow-y: auto;}
@@ -144,6 +144,9 @@
             <div class="form-group">
                 <label for="configSelect">Vehicle Configuration</label>
                 <select id="configSelect">
+                    <optgroup label="Light Duty & Commercial Pickups">
+                        <option value="light-truck">Passenger / Light Truck (2 Axles - 4 Tires)</option>
+                    </optgroup>
                     <optgroup label="Tractors (Power Units)">
                         <option value="tractor-single">Tractor - Single Axle (2 Axles)</option>
                         <option value="tractor-tandem">Tractor - Tandem Axle (3 Axles)</option>
@@ -182,7 +185,7 @@
 
         <div id="vehicle-layout" class="card">
             <h3 id="layout-title" style="margin-top:0;">Inspection</h3>
-            <p style="font-size: 13px; color: #555; margin-bottom: 20px;">Tap a tire to record tread depth or log an issue.</p>
+            <p style="font-size: 13px; color: #555; margin-bottom: 20px;">Tap a tire to record size, tread depth, or log issues.</p>
             
             <div id="axles-container"></div>
 
@@ -241,11 +244,16 @@
     <div id="issueModal" class="modal-overlay">
         <div class="modal-content">
             <h4 id="modalTirePosition">Tire Position</h4>
-            <p style="font-size: 12px; color: #555; margin-bottom: 15px;">Enter tread depth and log any issues if replacement is needed.</p>
+            <p style="font-size: 12px; color: #555; margin-bottom: 15px;">Enter size, tread depth, and log any issues if replacement is needed.</p>
             
             <div class="form-group">
+                <label for="tireSizeInput">Tire Size</label>
+                <input type="text" id="tireSizeInput" placeholder="e.g., LT245/75R17 or 265/70R17">
+            </div>
+
+            <div class="form-group">
                 <label for="treadDepthInput">Tread Depth (32nds / mm)</label>
-                <input type="number" id="treadDepthInput" placeholder="e.g., 12" min="0" max="35">
+                <input type="number" id="treadDepthInput" placeholder="e.g., 10" min="0" max="35">
             </div>
 
             <div class="form-group">
@@ -389,6 +397,7 @@
         document.getElementById('inspectionDate').valueAsDate = new Date();
 
         const layouts = {
+            'light-truck': [2, 2],
             'tractor-single': [2, 4],
             'tractor-tandem': [2, 4, 4],
             'trailer-pup': [4],
@@ -456,12 +465,12 @@
                     const leftGroup = document.createElement('div');
                     leftGroup.className = 'tire-group';
                     if (item === 4) leftGroup.appendChild(createTire(`A${axleCounter}-LO`, 'L-Out'));
-                    leftGroup.appendChild(createTire(`A${axleCounter}-LI`, item === 2 ? 'L' : 'L-In'));
+                    leftGroup.appendChild(createTire(`A${axleCounter}-LI`, item <= 2 ? 'L' : 'L-In'));
                     axleDiv.appendChild(leftGroup);
 
                     const rightGroup = document.createElement('div');
                     rightGroup.className = 'tire-group';
-                    rightGroup.appendChild(createTire(`A${axleCounter}-RI`, item === 2 ? 'R' : 'R-In'));
+                    rightGroup.appendChild(createTire(`A${axleCounter}-RI`, item <= 2 ? 'R' : 'R-In'));
                     if (item === 4) rightGroup.appendChild(createTire(`A${axleCounter}-RO`, 'R-Out'));
                     axleDiv.appendChild(rightGroup);
 
@@ -478,13 +487,14 @@
             tire.dataset.position = positionId;
             tire.dataset.replace = "false";
             
-            currentTires.push({ position: positionId, needsReplacement: false, reason: "", treadDepth: "" });
+            currentTires.push({ position: positionId, needsReplacement: false, reason: "", treadDepth: "", tireSize: "" });
 
             tire.onclick = function() {
                 activeTireId = positionId;
                 const tireObj = currentTires.find(t => t.position === positionId);
                 
                 document.getElementById('modalTirePosition').innerText = `Position: ${positionId}`;
+                document.getElementById('tireSizeInput').value = tireObj.tireSize || '';
                 document.getElementById('treadDepthInput').value = tireObj.treadDepth || '';
                 document.getElementById('issueSelect').value = tireObj.reason || '';
                 document.getElementById('issueModal').style.display = 'flex';
@@ -496,11 +506,13 @@
 
         function saveTireDetails() {
             if (!activeTireId) return;
+            const sizeVal = document.getElementById('tireSizeInput').value.trim();
             const treadVal = document.getElementById('treadDepthInput').value.trim();
             const reasonVal = document.getElementById('issueSelect').value;
             const tireElement = document.querySelector(`.tire[data-position="${activeTireId}"]`);
             const tireObj = currentTires.find(t => t.position === activeTireId);
 
+            tireObj.tireSize = sizeVal;
             tireObj.treadDepth = treadVal;
             tireObj.reason = reasonVal;
             
@@ -514,10 +526,10 @@
                 tireElement.classList.remove('replace');
             }
 
-            if (treadVal) {
-                tireElement.classList.add('has-tread');
+            if (treadVal || sizeVal) {
+                tireElement.classList.add('has-data');
             } else {
-                tireElement.classList.remove('has-tread');
+                tireElement.classList.remove('has-data');
             }
 
             closeModal();
@@ -539,8 +551,9 @@
 
             const tireCount = log.tires.length;
             let configKey = 'tractor-tandem'; 
-            if (tireCount === 6) configKey = 'tractor-single';
-            else if (tireCount === 4) configKey = 'trailer-pup'; 
+            if (tireCount === 4) configKey = 'light-truck';
+            else if (tireCount === 6) configKey = 'tractor-single';
+            else if (tireCount === 4 && log.tires.some(t => t.position.includes('A1-LO'))) configKey = 'trailer-pup'; 
             else if (tireCount === 8) configKey = 'trailer-tandem';
             else if (tireCount === 12) configKey = 'trailer-tri';
             else if (tireCount === 18) configKey = 'combo-standard';
@@ -557,13 +570,14 @@
                         localTire.needsReplacement = savedTire.needsReplacement || false;
                         localTire.reason = savedTire.reason || "";
                         localTire.treadDepth = savedTire.treadDepth || "";
+                        localTire.tireSize = savedTire.tireSize || "";
 
                         if (localTire.needsReplacement) {
                             tireElement.dataset.replace = "true";
                             tireElement.classList.add('replace');
                         }
-                        if (localTire.treadDepth) {
-                            tireElement.classList.add('has-tread');
+                        if (localTire.treadDepth || localTire.tireSize) {
+                            tireElement.classList.add('has-data');
                         }
                     }
                 }
@@ -740,13 +754,14 @@
                 logDiv.className = 'log-entry';
                 
                 const failedTires = log.tires.filter(t => t.needsReplacement).map(t => `${t.position} [${t.reason}]`);
-                const treadDepths = log.tires.filter(t => t.treadDepth).map(t => `${t.position}: ${t.treadDepth}/32"`).join(', ');
+                const tireDetails = log.tires.filter(t => t.treadDepth || t.tireSize)
+                    .map(t => `${t.position}: ${t.tireSize || 'Size N/A'} (${t.treadDepth ? t.treadDepth + '/32"' : 'Depth N/A'})`).join(', ');
 
                 const statusHtml = failedTires.length > 0 
                     ? `<span class="log-issues">Replace: ${failedTires.join(', ')}</span>` 
                     : `<span style="color: #28a745; font-weight: bold; font-size: 13px;">All Passed</span>`;
 
-                const treadHtml = treadDepths ? `<div style="font-size: 12px; color: #333; margin-top: 2px;"><strong>Treads:</strong> ${treadDepths}</div>` : '';
+                const detailsHtml = tireDetails ? `<div style="font-size: 12px; color: #333; margin-top: 2px;"><strong>Tires:</strong> ${tireDetails}</div>` : '';
                 const notesHtml = log.notes ? `<div class="log-notes"><strong>Notes:</strong> ${log.notes}</div>` : '';
                 
                 let metaInfo = [];
@@ -770,7 +785,7 @@
                         <strong>${log.unit}</strong>
                         <span style="font-size: 11px; color: #666;">Date: ${log.inspection_date}</span>
                         ${statusHtml}
-                        ${treadHtml}
+                        ${detailsHtml}
                         ${notesHtml}
                         ${photosHtml}
                     </div>
@@ -786,11 +801,12 @@
         function exportToCSV() {
             if (cloudLogs.length === 0) { alert("No logs fetched to export."); return; }
 
-            let csvContent = "Inspection ID,Company Name,Company Address,Inspected By,Unit Number,Date,Status,Tread Depths,Failed Tire Details,Notes,Photo Links\n";
+            let csvContent = "Inspection ID,Company Name,Company Address,Inspected By,Unit Number,Date,Status,Tire Sizes & Treads,Failed Tire Details,Notes,Photo Links\n";
 
             cloudLogs.forEach(log => {
                 const failedTires = log.tires.filter(t => t.needsReplacement).map(t => `${t.position} (${t.reason})`).join(' | ');
-                const treadDepths = log.tires.filter(t => t.treadDepth).map(t => `${t.position}:${t.treadDepth}`).join(' | ');
+                const tireDetails = log.tires.filter(t => t.treadDepth || t.tireSize)
+                    .map(t => `${t.position}[Size:${t.tireSize || 'N/A'}, Depth:${t.treadDepth || 'N/A'}]`).join(' | ');
                 const status = failedTires.length > 0 ? "Issues Found" : "All Passed";
                 const safeNotes = (log.notes || "").replace(/"/g, '""');
                 const safeCompany = (log.company || "").replace(/"/g, '""');
@@ -798,7 +814,7 @@
                 const safeInspector = (log.inspector || "").replace(/"/g, '""');
                 const photoLinks = (log.photo_urls || []).join(' | ');
                 
-                const row = `"${log.id}","${safeCompany}","${safeAddress}","${safeInspector}","${log.unit}","${log.inspection_date}","${status}","${treadDepths}","${failedTires}","${safeNotes}","${photoLinks}"`;
+                const row = `"${log.id}","${safeCompany}","${safeAddress}","${safeInspector}","${log.unit}","${log.inspection_date}","${status}","${tireDetails}","${failedTires}","${safeNotes}","${photoLinks}"`;
                 csvContent += row + "\n";
             });
 
@@ -824,8 +840,8 @@
             cloudLogs.forEach(log => {
                 const failedTires = log.tires.filter(t => t.needsReplacement)
                                              .map(t => `${t.position} (${t.reason})`).join(', ');
-                const treadDepths = log.tires.filter(t => t.treadDepth)
-                                             .map(t => `${t.position}: ${t.treadDepth}/32"`).join(', ');
+                const tireDetails = log.tires.filter(t => t.treadDepth || t.tireSize)
+                                             .map(t => `${t.position}: Size [${t.tireSize || 'N/A'}], Depth [${t.treadDepth ? t.treadDepth + '/32"' : 'N/A'}]`).join('\n');
                 
                 const status = failedTires.length > 0 ? "⚠️ ISSUES FOUND" : "✅ All Passed";
                 
@@ -835,7 +851,7 @@
                 emailBody += `Unit Number: ${log.unit}\n`;
                 emailBody += `Date: ${log.inspection_date}\n`;
                 emailBody += `Status: ${status}\n`;
-                if (treadDepths) emailBody += `Tread Depths: ${treadDepths}\n`;
+                if (tireDetails) emailBody += `Tire Details:\n${tireDetails}\n`;
                 if (failedTires.length > 0) emailBody += `Action Needed: ${failedTires}\n`;
                 if (log.notes) emailBody += `Notes: ${log.notes}\n`;
                 
