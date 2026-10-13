@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Commercial Fleet Tire Bumper</title>
+    <!-- Supabase Library -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; background-color: #f4f4f9; }
@@ -83,6 +84,7 @@
 </head>
 <body>
 
+    <!-- AUTHENTICATION SECTION -->
     <div id="auth-section">
         <div class="card auth-box">
             <h2 style="text-align: center; margin-top: 0;">Fleet Login</h2>
@@ -103,6 +105,7 @@
         </div>
     </div>
 
+    <!-- MAIN APP SECTION -->
     <div id="app-section">
         <div class="header-bar">
             <h2 style="margin: 0;">Fleet Tire Bumper</h2>
@@ -182,7 +185,7 @@
 
         <div id="vehicle-layout" class="card">
             <h3 id="layout-title" style="margin-top:0;">Inspection</h3>
-            <p style="font-size: 13px; color: #555; margin-bottom: 20px;">Tap a tire to record size, tread depth, or log issues.</p>
+            <p style="font-size: 13px; color: #555; margin-bottom: 20px;">Tap a tire to record size, air pressure, tread depth, or log issues.</p>
             
             <div id="axles-container"></div>
 
@@ -200,6 +203,7 @@
         </div>
     </div>
 
+    <!-- Modals -->
     <div id="settingsModal" class="modal-overlay">
         <div class="modal-content">
             <h4>Manage Dropdown Lists</h4>
@@ -219,6 +223,7 @@
         </div>
     </div>
 
+    <!-- Password Update Modal -->
     <div id="passwordModal" class="modal-overlay">
         <div class="modal-content">
             <h4>Update Password</h4>
@@ -235,19 +240,30 @@
         </div>
     </div>
 
+    <!-- Tire Details Modal -->
     <div id="issueModal" class="modal-overlay">
         <div class="modal-content">
             <h4 id="modalTirePosition">Tire Position</h4>
-            <p style="font-size: 12px; color: #555; margin-bottom: 15px;">Enter size, tread depth, and log any issues if replacement is needed.</p>
+            <p style="font-size: 12px; color: #555; margin-bottom: 15px;">Enter tire details, PSI, tread depth, and log issues if needed.</p>
             
             <div class="form-group">
                 <label for="tireSizeInput">Tire Size</label>
                 <input type="text" id="tireSizeInput" placeholder="e.g., 11R22.5 or 295/75R22.5">
             </div>
 
-            <div class="form-group" style="display: flex; align-items: center; gap: 8px; margin-bottom: 15px;">
+            <div class="form-group" style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
                 <input type="checkbox" id="applyAllSizes" style="width: 20px; height: 20px; margin: 0; cursor: pointer;">
                 <label for="applyAllSizes" style="font-weight: normal; font-size: 13px; cursor: pointer; margin: 0;">Apply this tire size to all tires on this unit</label>
+            </div>
+
+            <div class="form-group">
+                <label for="tirePsiInput">Air Pressure (PSI)</label>
+                <input type="number" id="tirePsiInput" placeholder="e.g., 105" min="0" max="150">
+            </div>
+
+            <div class="form-group" style="display: flex; align-items: center; gap: 8px; margin-bottom: 15px;">
+                <input type="checkbox" id="applyAllPsi" style="width: 20px; height: 20px; margin: 0; cursor: pointer;">
+                <label for="applyAllPsi" style="font-weight: normal; font-size: 13px; cursor: pointer; margin: 0;">Apply this PSI to all tires on this unit</label>
             </div>
 
             <div class="form-group">
@@ -491,7 +507,7 @@
             tire.dataset.position = positionId;
             tire.dataset.replace = "false";
             
-            currentTires.push({ position: positionId, needsReplacement: false, reason: "", treadDepth: "", tireSize: "" });
+            currentTires.push({ position: positionId, needsReplacement: false, reason: "", treadDepth: "", tireSize: "", tirePsi: "" });
 
             tire.onclick = function() {
                 activeTireId = positionId;
@@ -500,6 +516,8 @@
                 document.getElementById('modalTirePosition').innerText = `Position: ${positionId}`;
                 document.getElementById('tireSizeInput').value = tireObj.tireSize || '';
                 document.getElementById('applyAllSizes').checked = false;
+                document.getElementById('tirePsiInput').value = tireObj.tirePsi || '';
+                document.getElementById('applyAllPsi').checked = false;
                 document.getElementById('treadDepthInput').value = tireObj.treadDepth || '';
                 document.getElementById('issueSelect').value = tireObj.reason || '';
                 document.getElementById('issueModal').style.display = 'flex';
@@ -512,25 +530,37 @@
         function saveTireDetails() {
             if (!activeTireId) return;
             const sizeVal = document.getElementById('tireSizeInput').value.trim();
-            const applyAll = document.getElementById('applyAllSizes').checked;
+            const applyAllSizes = document.getElementById('applyAllSizes').checked;
+            const psiVal = document.getElementById('tirePsiInput').value.trim();
+            const applyAllPsi = document.getElementById('applyAllPsi').checked;
             const treadVal = document.getElementById('treadDepthInput').value.trim();
             const reasonVal = document.getElementById('issueSelect').value;
 
-            if (applyAll) {
+            if (applyAllSizes) {
                 currentTires.forEach(t => {
                     t.tireSize = sizeVal;
-                    const el = document.querySelector(`.tire[data-position="${t.position}"]`);
-                    if (el) {
-                        if (t.treadDepth || sizeVal) el.classList.add('has-data');
-                        else el.classList.remove('has-data');
-                    }
                 });
             }
+
+            if (applyAllPsi) {
+                currentTires.forEach(t => {
+                    t.tirePsi = psiVal;
+                });
+            }
+
+            currentTires.forEach(t => {
+                const el = document.querySelector(`.tire[data-position="${t.position}"]`);
+                if (el) {
+                    if (t.treadDepth || t.tireSize || t.tirePsi) el.classList.add('has-data');
+                    else el.classList.remove('has-data');
+                }
+            });
 
             const tireElement = document.querySelector(`.tire[data-position="${activeTireId}"]`);
             const tireObj = currentTires.find(t => t.position === activeTireId);
 
             tireObj.tireSize = sizeVal;
+            tireObj.tirePsi = psiVal;
             tireObj.treadDepth = treadVal;
             tireObj.reason = reasonVal;
             
@@ -544,7 +574,7 @@
                 tireElement.classList.remove('replace');
             }
 
-            if (treadVal || sizeVal) {
+            if (treadVal || sizeVal || psiVal) {
                 tireElement.classList.add('has-data');
             } else {
                 tireElement.classList.remove('has-data');
@@ -589,12 +619,13 @@
                         localTire.reason = savedTire.reason || "";
                         localTire.treadDepth = savedTire.treadDepth || "";
                         localTire.tireSize = savedTire.tireSize || "";
+                        localTire.tirePsi = savedTire.tirePsi || "";
 
                         if (localTire.needsReplacement) {
                             tireElement.dataset.replace = "true";
                             tireElement.classList.add('replace');
                         }
-                        if (localTire.treadDepth || localTire.tireSize) {
+                        if (localTire.treadDepth || localTire.tireSize || localTire.tirePsi) {
                             tireElement.classList.add('has-data');
                         }
                     }
@@ -772,8 +803,8 @@
                 logDiv.className = 'log-entry';
                 
                 const failedTires = log.tires.filter(t => t.needsReplacement).map(t => `${t.position} [${t.reason}]`);
-                const tireDetails = log.tires.filter(t => t.treadDepth || t.tireSize)
-                    .map(t => `${t.position}: ${t.tireSize || 'Size N/A'} (${t.treadDepth ? t.treadDepth + '/32"' : 'Depth N/A'})`).join(', ');
+                const tireDetails = log.tires.filter(t => t.treadDepth || t.tireSize || t.tirePsi)
+                    .map(t => `${t.position}: ${t.tireSize || 'Size N/A'}, ${t.tirePsi ? t.tirePsi + ' PSI' : 'PSI N/A'}, ${t.treadDepth ? t.treadDepth + '/32"' : 'Depth N/A'}`).join(', ');
 
                 const statusHtml = failedTires.length > 0 
                     ? `<span class="log-issues">Replace: ${failedTires.join(', ')}</span>` 
@@ -819,12 +850,12 @@
         function exportToCSV() {
             if (cloudLogs.length === 0) { alert("No logs fetched to export."); return; }
 
-            let csvContent = "Inspection ID,Company Name,Company Address,Inspected By,Unit Number,Date,Status,Tire Sizes & Treads,Failed Tire Details,Notes,Photo Links\n";
+            let csvContent = "Inspection ID,Company Name,Company Address,Inspected By,Unit Number,Date,Status,Tire Specifications,Failed Tire Details,Notes,Photo Links\n";
 
             cloudLogs.forEach(log => {
                 const failedTires = log.tires.filter(t => t.needsReplacement).map(t => `${t.position} (${t.reason})`).join(' | ');
-                const tireDetails = log.tires.filter(t => t.treadDepth || t.tireSize)
-                    .map(t => `${t.position}[Size:${t.tireSize || 'N/A'}, Depth:${t.treadDepth || 'N/A'}]`).join(' | ');
+                const tireDetails = log.tires.filter(t => t.treadDepth || t.tireSize || t.tirePsi)
+                    .map(t => `${t.position}[Size:${t.tireSize || 'N/A'}, PSI:${t.tirePsi || 'N/A'}, Depth:${t.treadDepth || 'N/A'}]`).join(' | ');
                 const status = failedTires.length > 0 ? "Issues Found" : "All Passed";
                 const safeNotes = (log.notes || "").replace(/"/g, '""');
                 const safeCompany = (log.company || "").replace(/"/g, '""');
@@ -858,8 +889,8 @@
             cloudLogs.forEach(log => {
                 const failedTires = log.tires.filter(t => t.needsReplacement)
                                              .map(t => `${t.position} (${t.reason})`).join(', ');
-                const tireDetails = log.tires.filter(t => t.treadDepth || t.tireSize)
-                                             .map(t => `${t.position}: Size [${t.tireSize || 'N/A'}], Depth [${t.treadDepth ? t.treadDepth + '/32"' : 'N/A'}]`).join('\n');
+                const tireDetails = log.tires.filter(t => t.treadDepth || t.tireSize || t.tirePsi)
+                                             .map(t => `${t.position}: Size [${t.tireSize || 'N/A'}], PSI [${t.tirePsi || 'N/A'}], Depth [${t.treadDepth ? t.treadDepth + '/32"' : 'N/A'}]`).join('\n');
                 
                 const status = failedTires.length > 0 ? "⚠️ ISSUES FOUND" : "✅ All Passed";
                 
