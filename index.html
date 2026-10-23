@@ -247,7 +247,7 @@
     <div id="emailPickerModal" class="modal-overlay">
         <div class="modal-content">
             <h4>Email a Unit Report</h4>
-            <p style="font-size: 12px; color: #555; margin-bottom: 10px;">One email per unit. Pick a unit to open its email.</p>
+            <p style="font-size: 12px; color: #555; margin-bottom: 10px;">One email per unit, with the PDF report attached.</p>
             <div id="emailUnitList"></div>
             <div class="modal-buttons">
                 <button class="btn-cancel" onclick="closeEmailPicker()">Close</button>
@@ -1179,12 +1179,34 @@
             return body;
         }
 
-        function emailUnitById(id) {
+        // Email a unit's PDF: share sheet with the PDF attached where supported,
+        // otherwise download the PDF and open a blank email to attach it to.
+        async function emailUnitById(id) {
             const log = cloudLogs.find(l => String(l.id) === String(id));
             if (!log) return;
-            const subject = encodeURIComponent(`Tire Inspection - Unit ${log.unit} - ${log.inspection_date}`);
-            const body = encodeURIComponent(buildUnitEmail(log));
-            window.location.href = `mailto:?subject=${subject}&body=${body}`;
+            const fileName = `${safeFilePart(log.unit)}_${log.inspection_date}_${String(log.id).slice(0, 6)}.pdf`;
+            const subject = `Tire Inspection - Unit ${log.unit} - ${log.inspection_date}`;
+            const failed = (log.tires || []).filter(t => t.needsReplacement).length;
+            const text = `Tire inspection report for unit ${log.unit} (${log.inspection_date}). ` +
+                (failed > 0 ? `${failed} tire${failed > 1 ? 's' : ''} need replacement.` : 'All tires passed.') +
+                ' PDF attached.';
+
+            const doc = buildUnitPDF(log);
+            const blob = doc.output('blob');
+            const file = new File([blob], fileName, { type: 'application/pdf' });
+
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                try {
+                    await navigator.share({ files: [file], title: subject, text: text });
+                    return;
+                } catch (e) {
+                    if (e && e.name === 'AbortError') return; // user closed the share sheet
+                }
+            }
+
+            // Fallback: save the PDF, then open a draft to attach it to
+            doc.save(fileName);
+            window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(text + '\n\n(Attach the downloaded file: ' + fileName + ')')}`;
         }
 
         // Email Report: pick which unit to email (one email per unit)
