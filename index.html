@@ -16,7 +16,7 @@
         button { background: #0056b3; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-size: 16px; width: 100%; font-weight: bold;}
         button:hover { background: #004494; }
         button:disabled { background: #6c757d; cursor: not-allowed; }
-        
+
         /* Auth Styles */
         #auth-section { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 60vh; }
         .auth-box { width: 100%; max-width: 400px; }
@@ -26,24 +26,24 @@
         .forgot-pass-btn { background: none; color: #0056b3; margin-top: 15px; font-size: 13px; padding: 0; text-decoration: underline; font-weight: normal;}
         .forgot-pass-btn:hover { background: none; color: #004494; }
         #app-section { display: none; } 
-        
+
         .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;}
         .header-buttons { display: flex; gap: 10px;}
         .logout-btn { background: #dc3545; width: auto; padding: 6px 12px; font-size: 13px;}
         .logout-btn:hover { background: #c82333; }
         .pass-btn { background: #17a2b8; width: auto; padding: 6px 12px; font-size: 13px;}
         .pass-btn:hover { background: #138496; }
-        
+
         .settings-btn { width: auto; background: #6c757d; padding: 6px 12px; font-size: 14px; font-weight: normal; border-radius: 4px;}
         .settings-btn:hover { background: #5a6268; }
 
         #vehicle-layout { display: flex; flex-direction: column; align-items: center; background: #e9ecef; padding: 20px; border-radius: 8px; margin-top: 20px; display: none;}
         #axles-container { display: flex; flex-direction: column; align-items: center; width: 100%; }
-        
+
         .axle { display: flex; justify-content: center; align-items: center; width: 100%; margin: 10px 0; position: relative; }
         .chassis { width: 40px; height: 100%; background: #6c757d; position: absolute; z-index: 1; border-radius: 2px;}
         .hitch { width: 12px; height: 35px; background: #343a40; margin: 5px 0; border-radius: 4px; z-index: 1;}
-        
+
         .tire-group { display: flex; gap: 5px; z-index: 2; margin: 0 25px; }
         .tire { width: 35px; height: 65px; background: #28a745; color: white; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; cursor: pointer; user-select: none; transition: background 0.2s, transform 0.1s; border: 2px solid #1e7e34; text-align: center; line-height: 1.1;}
         .tire:active { transform: scale(0.95); }
@@ -64,13 +64,13 @@
         .log-meta { font-size: 12px; color: #666; font-weight: bold; text-transform: uppercase;}
         .log-issues { color: #dc3545; font-weight: bold; font-size: 13px;}
         .log-notes { font-size: 12px; color: #444; background: #f8f9fa; padding: 6px; border-radius: 4px; margin-top: 4px; border: 1px solid #eee; }
-        
+
         .log-actions { display: flex; gap: 5px; align-items: flex-start; margin-left: 10px; flex-direction: column;}
         .edit-btn { background: #17a2b8; color: white; width: auto; padding: 5px 10px; font-size: 12px; height: fit-content;}
         .edit-btn:hover { background: #138496; }
         .delete-btn { background: #dc3545; color: white; width: auto; padding: 5px 10px; font-size: 12px; height: fit-content;}
         .delete-btn:hover { background: #c82333; }
-        
+
         .action-buttons { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;}
         .export-btn { background: #17a2b8; margin: 0; flex: 1;}
         .export-btn:hover { background: #138496; }
@@ -117,7 +117,7 @@
 
         <div class="card">
             <button class="settings-btn" style="position: absolute; top: 20px; right: 20px;" onclick="openSettingsModal()">⚙️ Manage Lists</button>
-            
+
             <datalist id="companyList"></datalist>
             <datalist id="inspectorList"></datalist>
 
@@ -163,7 +163,7 @@
                     </optgroup>
                 </select>
             </div>
-            
+
             <div class="form-group">
                 <label for="unitNotes">General Unit Notes (Optional)</label>
                 <textarea id="unitNotes" rows="3" placeholder="e.g., Mud flap missing, body damage..."></textarea>
@@ -186,7 +186,7 @@
         <div id="vehicle-layout" class="card">
             <h3 id="layout-title" style="margin-top:0;">Inspection</h3>
             <p style="font-size: 13px; color: #555; margin-bottom: 20px;">Tap a tire to record size, air pressure, tread depth, or log issues.</p>
-            
+
             <div id="axles-container"></div>
 
             <button id="submitBtn" style="margin-top: 25px; background: #28a745; border: 2px solid #1e7e34;" onclick="saveInspection()">Submit to Cloud</button>
@@ -195,8 +195,8 @@
         <div class="card">
             <h3 style="margin-top: 0;">My Cloud Logs</h3>
             <div class="action-buttons">
-                <button class="export-btn" onclick="exportToCSV()">Export to CSV</button>
-                <button class="email-btn" onclick="emailReport()">Email Report</button>
+                <button class="export-btn" onclick="exportToCSV()">Export CSV (Per Unit)</button>
+                <button class="email-btn" onclick="emailReport()">Email Unit Report</button>
             </div>
             <button class="export-btn" style="background: #28a745; margin-bottom: 15px;" onclick="fetchLogs()">🔄 Refresh Cloud Logs</button>
             <div id="log-container">Loading logs...</div>
@@ -240,12 +240,24 @@
         </div>
     </div>
 
+    <!-- Email Picker Modal -->
+    <div id="emailPickerModal" class="modal-overlay">
+        <div class="modal-content">
+            <h4>Email a Unit Report</h4>
+            <p style="font-size: 12px; color: #555; margin-bottom: 10px;">One email per unit. Pick a unit to open its email.</p>
+            <div id="emailUnitList"></div>
+            <div class="modal-buttons">
+                <button class="btn-cancel" onclick="closeEmailPicker()">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Tire Details Modal -->
     <div id="issueModal" class="modal-overlay">
         <div class="modal-content">
             <h4 id="modalTirePosition">Tire Position</h4>
             <p style="font-size: 12px; color: #555; margin-bottom: 15px;">Enter tire details, PSI, tread depth, and log issues if needed.</p>
-            
+
             <div class="form-group">
                 <label for="tireSizeInput">Tire Size</label>
                 <input type="text" id="tireSizeInput" placeholder="e.g., 11R22.5 or 295/75R22.5">
@@ -297,7 +309,7 @@
         // ==========================================
         const supabaseUrl = 'https://jksogknuoseclngdwnng.supabase.co';
         const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imprc29na251b3NlY2xuZ2R3bm5nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5ODM4MDksImV4cCI6MjA5MDU1OTgwOX0.k4Gc0UTJTmKk3jgQlkTtfXFmii7X2DV5geCSuVGU7eo';
-        
+
         let supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
         let currentUser = null; 
 
@@ -350,20 +362,20 @@
         async function handlePasswordReset() {
             const email = document.getElementById('authEmail').value;
             const msgBox = document.getElementById('authMessage');
-            
+
             if (!email) { 
                 msgBox.style.color = "#dc3545"; 
                 msgBox.innerText = "Please enter your email above first to reset your password."; 
                 return; 
             }
-            
+
             msgBox.style.color = "#666";
             msgBox.innerText = "Sending reset link...";
-            
+
             const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
                 redirectTo: window.location.href
             });
-            
+
             if (error) { 
                 msgBox.style.color = "#dc3545"; 
                 msgBox.innerText = error.message; 
@@ -384,18 +396,18 @@
         async function updatePassword() {
             const newPassword = document.getElementById('newPassword').value;
             const msgBox = document.getElementById('passwordMessage');
-            
+
             if (!newPassword || newPassword.length < 6) { 
                 msgBox.style.color = "#dc3545"; 
                 msgBox.innerText = "Password must be at least 6 characters."; 
                 return; 
             }
-            
+
             msgBox.style.color = "#666";
             msgBox.innerText = "Updating password...";
-            
+
             const { error } = await supabaseClient.auth.updateUser({ password: newPassword });
-            
+
             if (error) {
                 msgBox.style.color = "#dc3545";
                 msgBox.innerText = error.message;
@@ -433,7 +445,7 @@
             const inspectors = JSON.parse(localStorage.getItem('fleetInspectorList')) || [];
             const companyDatalist = document.getElementById('companyList');
             const inspectorDatalist = document.getElementById('inspectorList');
-            
+
             companyDatalist.innerHTML = '';
             companies.forEach(c => companyDatalist.appendChild(new Option(c, c)));
             inspectorDatalist.innerHTML = '';
@@ -442,7 +454,7 @@
 
         function openSettingsModal() { document.getElementById('settingsModal').style.display = 'flex'; }
         function closeSettingsModal() { document.getElementById('settingsModal').style.display = 'none'; }
-        
+
         function saveLists() {
             const cArray = document.getElementById('uploadCompanies').value.split('\n').map(s => s.trim()).filter(s => s.length > 0);
             const iArray = document.getElementById('uploadInspectors').value.split('\n').map(s => s.trim()).filter(s => s.length > 0);
@@ -456,12 +468,12 @@
             const unit = document.getElementById('unitNumber').value;
             const configKey = document.getElementById('configSelect').value;
             const dateVal = document.getElementById('inspectionDate').value;
-            
+
             if (!unit || !dateVal) { alert('Please fill in Unit Number and Date.'); return; }
 
             document.getElementById('vehicle-layout').style.display = 'flex';
             document.getElementById('layout-title').innerText = `Inspecting: ${unit.toUpperCase()}`;
-            
+
             const container = document.getElementById('axles-container');
             container.innerHTML = ''; 
             currentTires = [];
@@ -477,7 +489,7 @@
                 } else {
                     const axleDiv = document.createElement('div');
                     axleDiv.className = 'axle';
-                    
+
                     const chassis = document.createElement('div');
                     chassis.className = 'chassis';
                     axleDiv.appendChild(chassis);
@@ -506,13 +518,13 @@
             tire.innerHTML = label.replace('-', '<br>');
             tire.dataset.position = positionId;
             tire.dataset.replace = "false";
-            
+
             currentTires.push({ position: positionId, needsReplacement: false, reason: "", treadDepth: "", tireSize: "", tirePsi: "" });
 
             tire.onclick = function() {
                 activeTireId = positionId;
                 const tireObj = currentTires.find(t => t.position === positionId);
-                
+
                 document.getElementById('modalTirePosition').innerText = `Position: ${positionId}`;
                 document.getElementById('tireSizeInput').value = tireObj.tireSize || '';
                 document.getElementById('applyAllSizes').checked = false;
@@ -563,7 +575,7 @@
             tireObj.tirePsi = psiVal;
             tireObj.treadDepth = treadVal;
             tireObj.reason = reasonVal;
-            
+
             if (reasonVal) {
                 tireObj.needsReplacement = true;
                 tireElement.dataset.replace = "true";
@@ -606,7 +618,7 @@
             else if (tireCount === 12) configKey = 'trailer-tri';
             else if (tireCount === 18) configKey = 'combo-standard';
             else if (tireCount === 26) configKey = 'combo-doubles';
-            
+
             document.getElementById('configSelect').value = configKey;
             generateLayout();
 
@@ -633,7 +645,7 @@
             });
 
             document.getElementById('editModeActionArea').style.display = 'flex';
-            
+
             const startBtn = document.getElementById('startInspBtn');
             startBtn.innerText = "🔄 Change Layout (Warning: Clears Tires)";
             startBtn.style.background = "#ffc107";
@@ -652,9 +664,9 @@
             document.getElementById('unitNumber').value = '';
             document.getElementById('unitNotes').value = '';
             document.getElementById('photoUpload').value = '';
-            
+
             document.getElementById('editModeActionArea').style.display = 'none';
-            
+
             const startBtn = document.getElementById('startInspBtn');
             startBtn.innerText = "Start Inspection";
             startBtn.style.background = "#0056b3";
@@ -677,10 +689,10 @@
 
             const btnBottom = document.getElementById('submitBtn');
             const btnTop = document.getElementById('topUpdateBtn');
-            
+
             btnBottom.disabled = true;
             if(btnTop) btnTop.disabled = true;
-            
+
             let uploadedUrls = [];
             if (editingRecordId) {
                 const logToEdit = cloudLogs.find(l => l.id === editingRecordId);
@@ -692,17 +704,17 @@
             if (photoInput.files.length > 0) {
                 btnBottom.innerText = `Uploading ${photoInput.files.length} Photo(s)...`;
                 if(btnTop) btnTop.innerText = `Uploading ${photoInput.files.length} Photo(s)...`;
-                
+
                 for (let i = 0; i < photoInput.files.length; i++) {
                     const file = photoInput.files[i];
                     const fileExt = file.name.split('.').pop();
                     const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
                     const filePath = `${currentUser.id}/${fileName}`; 
-                    
+
                     const { data: uploadData, error: uploadError } = await supabaseClient.storage
                         .from('photos')
                         .upload(filePath, file);
-                        
+
                     if (uploadError) {
                         console.error("Photo upload error:", uploadError);
                         alert("A photo failed to upload, but we will save the rest of the report.");
@@ -715,7 +727,7 @@
 
             btnBottom.innerText = "Saving Record to Database...";
             if(btnTop) btnTop.innerText = "Saving Record to Database...";
-            
+
             let queryError = null;
 
             if (editingRecordId) {
@@ -801,7 +813,7 @@
             logs.forEach(log => {
                 const logDiv = document.createElement('div');
                 logDiv.className = 'log-entry';
-                
+
                 const failedTires = log.tires.filter(t => t.needsReplacement).map(t => `${t.position} [${t.reason}]`);
                 const tireDetails = log.tires.filter(t => t.treadDepth || t.tireSize || t.tirePsi)
                     .map(t => `${t.position}: ${t.tireSize || 'Size N/A'}, ${t.tirePsi ? t.tirePsi + ' PSI' : 'PSI N/A'}, ${t.treadDepth ? t.treadDepth + '/32"' : 'Depth N/A'}`).join(', ');
@@ -812,7 +824,7 @@
 
                 const detailsHtml = tireDetails ? `<div style="font-size: 12px; color: #333; margin-top: 2px;"><strong>Tires:</strong> ${tireDetails}</div>` : '';
                 const notesHtml = log.notes ? `<div class="log-notes"><strong>Notes:</strong> ${log.notes}</div>` : '';
-                
+
                 let metaInfo = [];
                 if (log.company) metaInfo.push(log.company);
                 if (log.company_address) metaInfo.push(log.company_address);
@@ -840,6 +852,8 @@
                     </div>
                     <div class="log-actions">
                         <button class="edit-btn" onclick="editLog('${log.id}')">Edit</button>
+                        <button class="edit-btn" style="background:#6f42c1;" onclick="exportUnitById('${log.id}')">CSV</button>
+                        <button class="edit-btn" style="background:#6f42c1;" onclick="emailUnitById('${log.id}')">Email</button>
                         <button class="delete-btn" onclick="deleteLog('${log.id}')">Del</button>
                     </div>
                 `;
@@ -847,77 +861,144 @@
             });
         }
 
-        function exportToCSV() {
-            if (cloudLogs.length === 0) { alert("No logs fetched to export."); return; }
+        // ==========================================
+        // PER-UNIT EXPORT & EMAIL
+        // ==========================================
+        function axleLabel(position) {
+            const m = position.match(/^A(\d+)-/);
+            return m ? `Axle ${m[1]}` : '';
+        }
 
-            let csvContent = "Inspection ID,Company Name,Company Address,Inspected By,Unit Number,Date,Status,Tire Specifications,Failed Tire Details,Notes,Photo Links\n";
+        function sideLabel(position) {
+            const code = (position.split('-')[1] || '');
+            const map = { LO: 'Left Outer', LI: 'Left Inner', RI: 'Right Inner', RO: 'Right Outer' };
+            return map[code] || code;
+        }
 
-            cloudLogs.forEach(log => {
-                const failedTires = log.tires.filter(t => t.needsReplacement).map(t => `${t.position} (${t.reason})`).join(' | ');
-                const tireDetails = log.tires.filter(t => t.treadDepth || t.tireSize || t.tirePsi)
-                    .map(t => `${t.position}[Size:${t.tireSize || 'N/A'}, PSI:${t.tirePsi || 'N/A'}, Depth:${t.treadDepth || 'N/A'}]`).join(' | ');
-                const status = failedTires.length > 0 ? "Issues Found" : "All Passed";
-                const safeNotes = (log.notes || "").replace(/"/g, '""');
-                const safeCompany = (log.company || "").replace(/"/g, '""');
-                const safeAddress = (log.company_address || "").replace(/"/g, '""');
-                const safeInspector = (log.inspector || "").replace(/"/g, '""');
-                const photoLinks = (log.photo_urls || []).join(' | ');
-                
-                const row = `"${log.id}","${safeCompany}","${safeAddress}","${safeInspector}","${log.unit}","${log.inspection_date}","${status}","${tireDetails}","${failedTires}","${safeNotes}","${photoLinks}"`;
-                csvContent += row + "\n";
+        function csvCell(v) {
+            return `"${String(v ?? '').replace(/"/g, '""')}"`;
+        }
+
+        function buildUnitCSV(log) {
+            const tires = log.tires || [];
+            const failed = tires.filter(t => t.needsReplacement);
+            const rows = [];
+            rows.push(['FLEET TIRE INSPECTION REPORT']);
+            rows.push(['Unit Number', log.unit]);
+            rows.push(['Inspection Date', log.inspection_date]);
+            rows.push(['Company', log.company || '']);
+            rows.push(['Company Address', log.company_address || '']);
+            rows.push(['Inspected By', log.inspector || '']);
+            rows.push(['Status', failed.length > 0 ? `Issues Found (${failed.length} tire${failed.length > 1 ? 's' : ''})` : 'All Passed']);
+            rows.push(['Notes', log.notes || '']);
+            (log.photo_urls || []).forEach((u, i) => rows.push([`Photo ${i + 1}`, u]));
+            rows.push([]);
+            rows.push(['Axle', 'Position', 'Side', 'Tire Size', 'PSI', 'Tread Depth (32nds)', 'Status', 'Issue / Replacement Reason']);
+            tires.forEach(t => {
+                rows.push([
+                    axleLabel(t.position), t.position, sideLabel(t.position),
+                    t.tireSize || '', t.tirePsi || '', t.treadDepth || '',
+                    t.needsReplacement ? 'REPLACE' : 'OK', t.reason || ''
+                ]);
             });
+            return rows.map(r => r.map(csvCell).join(',')).join('\n');
+        }
 
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        function safeFilePart(str) {
+            return String(str || 'unit').replace(/[^a-z0-9_-]+/gi, '_');
+        }
+
+        function downloadUnitCSV(log) {
+            const blob = new Blob([buildUnitCSV(log)], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.setAttribute("href", url);
-            link.setAttribute("download", `my_fleet_inspections_${new Date().toISOString().split('T')[0]}.csv`);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${safeFilePart(log.unit)}_${log.inspection_date}_${String(log.id).slice(0, 6)}.csv`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
         }
 
-        function emailReport() {
-            if (cloudLogs.length === 0) {
-                alert("No inspections to email yet.");
-                return;
-            }
+        function exportUnitById(id) {
+            const log = cloudLogs.find(l => String(l.id) === String(id));
+            if (log) downloadUnitCSV(log);
+        }
 
-            let emailBody = "FLEET TIRE INSPECTION REPORT\n";
-            emailBody += "----------------------------------------\n\n";
+        // One CSV file per unit, downloaded one after another
+        function exportToCSV() {
+            if (cloudLogs.length === 0) { alert("No logs fetched to export."); return; }
+            if (cloudLogs.length > 1 && !confirm(`This will download ${cloudLogs.length} files (one per unit). Continue?`)) return;
+            cloudLogs.forEach((log, i) => setTimeout(() => downloadUnitCSV(log), i * 500));
+        }
 
-            cloudLogs.forEach(log => {
-                const failedTires = log.tires.filter(t => t.needsReplacement)
-                                             .map(t => `${t.position} (${t.reason})`).join(', ');
-                const tireDetails = log.tires.filter(t => t.treadDepth || t.tireSize || t.tirePsi)
-                                             .map(t => `${t.position}: Size [${t.tireSize || 'N/A'}], PSI [${t.tirePsi || 'N/A'}], Depth [${t.treadDepth ? t.treadDepth + '/32"' : 'N/A'}]`).join('\n');
-                
-                const status = failedTires.length > 0 ? "⚠️ ISSUES FOUND" : "✅ All Passed";
-                
-                emailBody += `Company: ${log.company || "N/A"}\n`;
-                if (log.company_address) emailBody += `Address: ${log.company_address}\n`;
-                emailBody += `Inspected By: ${log.inspector || "N/A"}\n`;
-                emailBody += `Unit Number: ${log.unit}\n`;
-                emailBody += `Date: ${log.inspection_date}\n`;
-                emailBody += `Status: ${status}\n`;
-                if (tireDetails) emailBody += `Tire Details:\n${tireDetails}\n`;
-                if (failedTires.length > 0) emailBody += `Action Needed: ${failedTires}\n`;
-                if (log.notes) emailBody += `Notes: ${log.notes}\n`;
-                
-                if (log.photo_urls && log.photo_urls.length > 0) {
-                    emailBody += `Photos:\n`;
-                    log.photo_urls.forEach((url, i) => {
-                        emailBody += ` - Image ${i + 1}: ${url}\n`;
-                    });
-                }
-                emailBody += "\n----------------------------------------\n\n";
+        function buildUnitEmail(log) {
+            const tires = log.tires || [];
+            const failed = tires.filter(t => t.needsReplacement);
+            let body = "FLEET TIRE INSPECTION REPORT\n";
+            body += "----------------------------------------\n";
+            body += `Unit Number: ${log.unit}\n`;
+            body += `Date: ${log.inspection_date}\n`;
+            body += `Company: ${log.company || "N/A"}\n`;
+            if (log.company_address) body += `Address: ${log.company_address}\n`;
+            body += `Inspected By: ${log.inspector || "N/A"}\n`;
+            body += `Status: ${failed.length > 0 ? "ISSUES FOUND" : "All Passed"}\n`;
+            if (log.notes) body += `Notes: ${log.notes}\n`;
+            body += "\nTIRE DETAILS\n";
+
+            let currentAxle = '';
+            tires.forEach(t => {
+                const ax = axleLabel(t.position);
+                if (ax !== currentAxle) { currentAxle = ax; body += `\n${ax}\n`; }
+                body += ` ${t.position} (${sideLabel(t.position)}): Size ${t.tireSize || 'N/A'}, PSI ${t.tirePsi || 'N/A'}, Tread ${t.treadDepth ? t.treadDepth + '/32' : 'N/A'}`;
+                if (t.needsReplacement) body += ` -- REPLACE: ${t.reason}`;
+                body += "\n";
             });
 
-            const subject = encodeURIComponent(`Yard Inspection Report - ${new Date().toISOString().split('T')[0]}`);
-            const body = encodeURIComponent(emailBody);
-            
+            if (failed.length > 0) {
+                body += "\nACTION NEEDED\n";
+                failed.forEach(t => { body += ` - ${t.position}: ${t.reason}\n`; });
+            }
+
+            if (log.photo_urls && log.photo_urls.length > 0) {
+                body += "\nPHOTOS\n";
+                log.photo_urls.forEach((u, i) => { body += ` - Image ${i + 1}: ${u}\n`; });
+            }
+            return body;
+        }
+
+        function emailUnitById(id) {
+            const log = cloudLogs.find(l => String(l.id) === String(id));
+            if (!log) return;
+            const subject = encodeURIComponent(`Tire Inspection - Unit ${log.unit} - ${log.inspection_date}`);
+            const body = encodeURIComponent(buildUnitEmail(log));
             window.location.href = `mailto:?subject=${subject}&body=${body}`;
         }
+
+        // Email Report: pick which unit to email (one email per unit)
+        function emailReport() {
+            if (cloudLogs.length === 0) { alert("No inspections to email yet."); return; }
+            const list = document.getElementById('emailUnitList');
+            list.innerHTML = '';
+            cloudLogs.forEach(log => {
+                const row = document.createElement('div');
+                row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid #eee;';
+                const label = document.createElement('span');
+                label.style.fontSize = '14px';
+                label.textContent = `${log.unit} - ${log.inspection_date}`;
+                const btn = document.createElement('button');
+                btn.className = 'email-btn';
+                btn.style.cssText = 'width:auto; flex:none; padding:6px 12px; font-size:13px; margin:0;';
+                btn.textContent = 'Email';
+                btn.onclick = () => emailUnitById(log.id);
+                row.appendChild(label);
+                row.appendChild(btn);
+                list.appendChild(row);
+            });
+            document.getElementById('emailPickerModal').style.display = 'flex';
+        }
+
+        function closeEmailPicker() { document.getElementById('emailPickerModal').style.display = 'none'; }
     </script>
 </body>
 </html>
