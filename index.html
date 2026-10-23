@@ -6,6 +6,8 @@
     <title>Commercial Fleet Tire Bumper</title>
     <!-- Supabase Library -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- PDF Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; background-color: #f4f4f9; }
         .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; position: relative;}
@@ -195,6 +197,7 @@
         <div class="card">
             <h3 style="margin-top: 0;">My Cloud Logs</h3>
             <div class="action-buttons">
+                <button class="export-btn" style="background:#fd7e14;" onclick="exportToPDF()">Export PDF (Per Unit)</button>
                 <button class="export-btn" onclick="exportToCSV()">Export CSV (Per Unit)</button>
                 <button class="email-btn" onclick="emailReport()">Email Unit Report</button>
             </div>
@@ -852,6 +855,7 @@
                     </div>
                     <div class="log-actions">
                         <button class="edit-btn" onclick="editLog('${log.id}')">Edit</button>
+                        <button class="edit-btn" style="background:#fd7e14;" onclick="exportPdfById('${log.id}')">PDF</button>
                         <button class="edit-btn" style="background:#6f42c1;" onclick="exportUnitById('${log.id}')">CSV</button>
                         <button class="edit-btn" style="background:#6f42c1;" onclick="emailUnitById('${log.id}')">Email</button>
                         <button class="delete-btn" onclick="deleteLog('${log.id}')">Del</button>
@@ -930,6 +934,214 @@
             if (cloudLogs.length === 0) { alert("No logs fetched to export."); return; }
             if (cloudLogs.length > 1 && !confirm(`This will download ${cloudLogs.length} files (one per unit). Continue?`)) return;
             cloudLogs.forEach((log, i) => setTimeout(() => downloadUnitCSV(log), i * 500));
+        }
+
+        // ==========================================
+        // PDF EXPORT (with tire-position diagram)
+        // ==========================================
+        // Rebuild axle structure from saved tire positions (A1-LO, A1-LI, ...)
+        function buildAxlesFromTires(tires) {
+            const axles = {};
+            tires.forEach(t => {
+                const m = t.position.match(/^A(\d+)-(LO|LI|RI|RO)$/);
+                if (!m) return;
+                const n = parseInt(m[1], 10);
+                (axles[n] = axles[n] || {})[m[2]] = t;
+            });
+            const nums = Object.keys(axles).map(Number).sort((a, b) => a - b);
+            const total = tires.length;
+            // Hitch gaps only exist on combinations
+            let gapsAfter = [];
+            if (total === 18) gapsAfter = [3];
+            else if (total === 22) gapsAfter = [3, 4, 5];
+            return nums.map(n => ({ num: n, tires: axles[n], dual: !!(axles[n].LO || axles[n].RO), gapAfter: gapsAfter.includes(n) }));
+        }
+
+        function buildUnitPDF(log) {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ unit: 'mm', format: 'letter' });
+            const W = doc.internal.pageSize.getWidth();
+            const H = doc.internal.pageSize.getHeight();
+            const tires = log.tires || [];
+            const failed = tires.filter(t => t.needsReplacement);
+            const margin = 14;
+
+            // ---- Header ----
+            doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
+            doc.text('Fleet Tire Inspection Report', margin, 16);
+            doc.setFontSize(12);
+            doc.text(`Unit ${log.unit}`, W - margin, 16, { align: 'right' });
+            doc.setDrawColor(0, 86, 179); doc.setLineWidth(0.6);
+            doc.line(margin, 19, W - margin, 19);
+
+            doc.setFontSize(10);
+            const info = [
+                ['Company', log.company || 'N/A'],
+                ['Address', log.company_address || 'N/A'],
+                ['Inspected By', log.inspector || 'N/A'],
+                ['Date', log.inspection_date || 'N/A'],
+                ['Status', failed.length > 0 ? `ISSUES FOUND - ${failed.length} tire${failed.length > 1 ? 's' : ''} to replace` : 'All Passed']
+            ];
+            let y = 26;
+            info.forEach(([k, v]) => {
+                doc.setFont('helvetica', 'bold'); doc.text(`${k}:`, margin, y);
+                doc.setFont('helvetica', 'normal');
+                if (k === 'Status') doc.setTextColor(failed.length > 0 ? 220 : 40, failed.length > 0 ? 53 : 167, failed.length > 0 ? 69 : 69);
+                doc.text(String(v), margin + 28, y);
+                doc.setTextColor(0, 0, 0);
+                y += 5.5;
+            });
+            if (log.notes) {
+                doc.setFont('helvetica', 'bold'); doc.text('Notes:', margin, y);
+                doc.setFont('helvetica', 'normal');
+                const lines = doc.splitTextToSize(log.notes, W - margin * 2 - 28);
+                doc.text(lines, margin + 28, y);
+                y += lines.length * 5;
+            }
+
+            // ---- Diagram ----
+            y += 4;
+            const axles = buildAxlesFromTires(tires);
+            const gapCount = axles.filter(a => a.gapAfter).length;
+            const legendH = 10;
+            const avail = H - y - legendH - 10;
+            const units = axles.length + gapCount * 0.5;
+            const rowH = Math.min(30, avail / Math.max(units, 1));
+            const tireH = rowH * 0.78;
+            const tireW = Math.min(tireH * 0.5, 14);
+            const gapPx = rowH * 0.5;
+            const cx = W / 2;
+            const groupGap = 14;   // half distance between inner tires across chassis
+            const tireGap = 1.5;
+
+            // Chassis spine
+            const spineTop = y;
+            const spineBottom = y + axles.length * rowH + gapCount * gapPx;
+            doc.setFillColor(108, 117, 125);
+            doc.rect(cx - 2, spineTop, 4, spineBottom - spineTop, 'F');
+
+            const drawTire = (t, x, ty, code, axleNum) => {
+                if (!t) return;
+                const bad = t.needsReplacement;
+                const hasData = t.treadDepth || t.tireSize || t.tirePsi;
+                doc.setFillColor(bad ? 220 : 40, bad ? 53 : 167, bad ? 69 : 69);
+                doc.setDrawColor(hasData ? 0 : (bad ? 189 : 30), hasData ? 86 : (bad ? 33 : 126), hasData ? 179 : (bad ? 48 : 52));
+                doc.setLineWidth(0.6);
+                doc.roundedRect(x, ty, tireW, tireH, 1.5, 1.5, 'FD');
+                doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(Math.max(5, Math.min(7, tireW * 0.65)));
+                doc.text(`A${axleNum}`, x + tireW / 2, ty + tireH / 2 - 1, { align: 'center' });
+                doc.text(code, x + tireW / 2, ty + tireH / 2 + 2.5, { align: 'center' });
+                doc.setTextColor(0, 0, 0);
+            };
+
+            let ay = y;
+            axles.forEach(a => {
+                const ty = ay + (rowH - tireH) / 2;
+                // axle label
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(90, 90, 90);
+                doc.text(`Axle ${a.num}`, margin, ty + tireH / 2 + 1);
+                doc.setTextColor(0, 0, 0);
+                // left side: inner is closest to chassis
+                const liX = cx - groupGap - tireW;
+                drawTire(a.tires.LI, liX, ty, 'LI', a.num);
+                drawTire(a.tires.LO, liX - tireGap - tireW, ty, 'LO', a.num);
+                const riX = cx + groupGap;
+                drawTire(a.tires.RI, riX, ty, 'RI', a.num);
+                drawTire(a.tires.RO, riX + tireW + tireGap, ty, 'RO', a.num);
+                ay += rowH;
+                if (a.gapAfter) {
+                    doc.setFillColor(52, 58, 64);
+                    doc.roundedRect(cx - 2.5, ay + gapPx * 0.1, 5, gapPx * 0.8, 1, 1, 'F');
+                    ay += gapPx;
+                }
+            });
+
+            // Tire detail callouts: show size/PSI/tread next to each tire row on the right
+            // (kept in table below to stay readable)
+
+            // Legend
+            let ly = ay + 5;
+            doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+            doc.setFillColor(40, 167, 69); doc.rect(margin, ly - 3, 4, 4, 'F'); doc.text('OK', margin + 6, ly);
+            doc.setFillColor(220, 53, 69); doc.rect(margin + 20, ly - 3, 4, 4, 'F'); doc.text('Replace', margin + 26, ly);
+            doc.setDrawColor(0, 86, 179); doc.setLineWidth(0.6); doc.rect(margin + 50, ly - 3, 4, 4, 'S'); doc.text('Has data recorded', margin + 56, ly);
+
+            // ---- Tire table ----
+            doc.addPage();
+            let ty = 18;
+            const cols = [
+                { h: 'Axle', x: margin, w: 16 },
+                { h: 'Position', x: margin + 16, w: 22 },
+                { h: 'Side', x: margin + 38, w: 30 },
+                { h: 'Tire Size', x: margin + 68, w: 32 },
+                { h: 'PSI', x: margin + 100, w: 16 },
+                { h: 'Tread', x: margin + 116, w: 18 },
+                { h: 'Status / Issue', x: margin + 134, w: W - margin * 2 - 134 }
+            ];
+            const header = () => {
+                doc.setFillColor(0, 86, 179); doc.rect(margin, ty - 5, W - margin * 2, 7, 'F');
+                doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
+                cols.forEach(c => doc.text(c.h, c.x + 1.5, ty));
+                doc.setTextColor(0, 0, 0);
+                ty += 7;
+            };
+            doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
+            doc.text(`Tire Details - Unit ${log.unit}`, margin, ty - 6);
+            ty += 4;
+            header();
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+            tires.forEach((t, i) => {
+                if (ty > H - 20) { doc.addPage(); ty = 18; header(); doc.setFont('helvetica', 'normal'); doc.setFontSize(9); }
+                if (i % 2 === 0) { doc.setFillColor(244, 244, 249); doc.rect(margin, ty - 4.5, W - margin * 2, 6.5, 'F'); }
+                const status = t.needsReplacement ? `REPLACE - ${t.reason}` : 'OK';
+                const vals = [axleLabel(t.position), t.position, sideLabel(t.position), t.tireSize || '-', t.tirePsi || '-', t.treadDepth ? `${t.treadDepth}/32` : '-', status];
+                vals.forEach((v, ci) => {
+                    if (ci === 6) doc.setTextColor(t.needsReplacement ? 220 : 40, t.needsReplacement ? 53 : 140, t.needsReplacement ? 69 : 69);
+                    doc.text(String(v), cols[ci].x + 1.5, ty, { maxWidth: cols[ci].w - 2 });
+                    doc.setTextColor(0, 0, 0);
+                });
+                ty += 6.5;
+            });
+
+            // ---- Photos ----
+            if (log.photo_urls && log.photo_urls.length > 0) {
+                ty += 6;
+                if (ty > H - 30) { doc.addPage(); ty = 18; }
+                doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+                doc.text('Photos', margin, ty); ty += 5;
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(0, 86, 179);
+                log.photo_urls.forEach((u, i) => {
+                    if (ty > H - 15) { doc.addPage(); ty = 18; }
+                    doc.textWithLink(`Photo ${i + 1}`, margin, ty, { url: u });
+                    ty += 5;
+                });
+                doc.setTextColor(0, 0, 0);
+            }
+
+            // Footer
+            const pages = doc.getNumberOfPages();
+            for (let i = 1; i <= pages; i++) {
+                doc.setPage(i); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(120, 120, 120);
+                doc.text(`Unit ${log.unit} - ${log.inspection_date}`, margin, H - 8);
+                doc.text(`Page ${i} of ${pages}`, W - margin, H - 8, { align: 'right' });
+            }
+            return doc;
+        }
+
+        function downloadUnitPDF(log) {
+            buildUnitPDF(log).save(`${safeFilePart(log.unit)}_${log.inspection_date}_${String(log.id).slice(0, 6)}.pdf`);
+        }
+
+        function exportPdfById(id) {
+            const log = cloudLogs.find(l => String(l.id) === String(id));
+            if (log) downloadUnitPDF(log);
+        }
+
+        // One PDF per unit
+        function exportToPDF() {
+            if (cloudLogs.length === 0) { alert("No logs fetched to export."); return; }
+            if (cloudLogs.length > 1 && !confirm(`This will download ${cloudLogs.length} PDFs (one per unit). Continue?`)) return;
+            cloudLogs.forEach((log, i) => setTimeout(() => downloadUnitPDF(log), i * 600));
         }
 
         function buildUnitEmail(log) {
